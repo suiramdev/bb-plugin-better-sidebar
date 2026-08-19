@@ -5,13 +5,13 @@ import { CONTROL_HOVER_TRANSITION } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 
 /**
-* Adds a project from a folder the user picks. It sits opposite the sort
-* control, at the far right of the same row: the two things you can do to the
-* project list live on the line above it.
-*
-* The picker is the host's native dialog, so this button owns no form — it
-* only reports what came back.
-*/
+ * Adds a project from a folder the user picks. It sits opposite the sort
+ * control, at the far right of the same row: the two things you can do to the
+ * project list live on the line above it.
+ *
+ * The picker is the host's native dialog, so this button owns no form — it
+ * only reports what came back.
+ */
 export function AddProjectButton({
   onAdd,
 }: {

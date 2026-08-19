@@ -29,6 +29,8 @@ import { ThreadRow } from "./ThreadRow";
 import { stepMoveTarget } from "./manual-move";
 import { useSidebarData, useStackBranches } from "./useSidebarData";
 import { applyStacks, environmentIdsFor } from "./stacking";
+import { orderedThreadIds } from "./selection";
+import { ThreadSelectionProvider } from "./SelectionContext";
 
 const COLLAPSED_STORAGE_KEY = "better-sidebar.collapsed-projects";
 
@@ -204,6 +206,17 @@ export function ThreadList({
   // A search shows what it found, whatever the user collapsed.
   const isQuietCollapsed = !isSearching && collapsed.has(QUIET_SECTION_KEY);
 
+  // The rows actually on screen, top to bottom: what a shift-click range is
+  // measured against, so it can never sweep up a row inside a closed project.
+  const visibleThreadIds = useMemo(
+    () =>
+      orderedThreadIds(
+        [...active, ...(isQuietCollapsed ? [] : quiet)],
+        (projectId) => !(!isSearching && collapsed.has(projectId)),
+      ),
+    [active, quiet, isQuietCollapsed, isSearching, collapsed],
+  );
+
   const renderSection = (group: ProjectGroup, isQuiet: boolean) => (
     <ProjectSection
       key={group.projectId}
@@ -245,127 +258,129 @@ export function ThreadList({
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between px-2 pb-1">
-        <SortMenu value={preferences.projectSort} onChange={setProjectSort} />
-        <AddProjectButton onAdd={addProject} />
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
-        {status === "loading" ? null : status === "error" ? (
-          <div role="status" className="px-4 py-6 text-center">
-            <p className="text-xs font-medium text-foreground">
-              Unable to load threads
-            </p>
-            <p className="mt-1 text-pretty text-xs text-muted-foreground">
-              Check that BB is still running, then reopen the sidebar.
-            </p>
-          </div>
-        ) : total === 0 && groups.length === 0 ? (
-          // An empty state that only shrugs leaves the reader where they
-          // started. Each of these says what the space holds and what to do
-          // next, and the search one names the query it failed on.
-          <div role="status" className="px-4 py-6 text-center">
-            <p className="text-xs font-medium text-foreground">
-              {isSearching
-                ? `No threads match \u201C${searchQuery.trim()}\u201D`
-                : "No threads yet"}
-            </p>
-            <p className="mt-1 text-pretty text-xs text-muted-foreground">
-              {isSearching
-                ? "Clear the search to see every project."
-                : "Start one with the New thread button above and it will appear under its project."}
-            </p>
-          </div>
-        ) : (
-          <>
-            {active.map((group) => renderSection(group, false))}
-            {quiet.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => toggle(QUIET_SECTION_KEY)}
-                aria-expanded={!isQuietCollapsed}
-                className={cn(
-                  "group/quiet mt-4 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left",
-                  HEADER_HEIGHT,
-                  FOCUS_RING,
-                  LIST_HOVER_TRANSITION,
-                  // One muted step, not a muted token diluted again by an
-                  // alpha: a section heading still has to be readable.
-                  "text-2xs font-semibold uppercase tracking-wide text-muted-foreground",
-                  "hover:bg-sidebar-accent/60 hover:text-foreground",
-                )}
-              >
-                {/* A heading, not a bare rule: it names what follows for a
-                    screen reader, where dimmed rows say nothing at all. */}
-                <span
-                  role="heading"
-                  aria-level={2}
-                  className="min-w-0 flex-1 truncate"
-                >
-                  No threads yet
-                </span>
-                <span className="shrink-0 tabular-nums">{quiet.length}</span>
-                <Icon
-                  name="ChevronDown"
+    <ThreadSelectionProvider order={visibleThreadIds} threads={threads}>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center justify-between px-2 pb-1">
+          <SortMenu value={preferences.projectSort} onChange={setProjectSort} />
+          <AddProjectButton onAdd={addProject} />
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+          {status === "loading" ? null : status === "error" ? (
+            <div role="status" className="px-4 py-6 text-center">
+              <p className="text-xs font-medium text-foreground">
+                Unable to load threads
+              </p>
+              <p className="mt-1 text-pretty text-xs text-muted-foreground">
+                Check that BB is still running, then reopen the sidebar.
+              </p>
+            </div>
+          ) : total === 0 && groups.length === 0 ? (
+            // An empty state that only shrugs leaves the reader where they
+            // started. Each of these says what the space holds and what to do
+            // next, and the search one names the query it failed on.
+            <div role="status" className="px-4 py-6 text-center">
+              <p className="text-xs font-medium text-foreground">
+                {isSearching
+                  ? `No threads match \u201C${searchQuery.trim()}\u201D`
+                  : "No threads yet"}
+              </p>
+              <p className="mt-1 text-pretty text-xs text-muted-foreground">
+                {isSearching
+                  ? "Clear the search to see every project."
+                  : "Start one with the New thread button above and it will appear under its project."}
+              </p>
+            </div>
+          ) : (
+            <>
+              {active.map((group) => renderSection(group, false))}
+              {quiet.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => toggle(QUIET_SECTION_KEY)}
+                  aria-expanded={!isQuietCollapsed}
                   className={cn(
-                    "size-3 shrink-0 motion-safe:transition-transform",
-                    isQuietCollapsed && "-rotate-90",
+                    "group/quiet mt-4 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left",
+                    HEADER_HEIGHT,
+                    FOCUS_RING,
+                    LIST_HOVER_TRANSITION,
+                    // One muted step, not a muted token diluted again by an
+                    // alpha: a section heading still has to be readable.
+                    "text-2xs font-semibold uppercase tracking-wide text-muted-foreground",
+                    "hover:bg-sidebar-accent/60 hover:text-foreground",
                   )}
-                />
-              </button>
-            ) : null}
-            {isQuietCollapsed
-              ? null
-              : quiet.map((group) => renderSection(group, true))}
-          </>
-        )}
+                >
+                  {/* A heading, not a bare rule: it names what follows for a
+                    screen reader, where dimmed rows say nothing at all. */}
+                  <span
+                    role="heading"
+                    aria-level={2}
+                    className="min-w-0 flex-1 truncate"
+                  >
+                    No threads yet
+                  </span>
+                  <span className="shrink-0 tabular-nums">{quiet.length}</span>
+                  <Icon
+                    name="ChevronDown"
+                    className={cn(
+                      "size-3 shrink-0 motion-safe:transition-transform",
+                      isQuietCollapsed && "-rotate-90",
+                    )}
+                  />
+                </button>
+              ) : null}
+              {isQuietCollapsed
+                ? null
+                : quiet.map((group) => renderSection(group, true))}
+            </>
+          )}
+        </div>
+
+        <Dialog
+          open={editing !== null}
+          onOpenChange={(open) => !open && setEditing(null)}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Project icon</DialogTitle>
+            </DialogHeader>
+            {editingProject === null ? null : (
+              <IconEditor
+                projectId={editingProject.id}
+                projectName={editingProject.name}
+                // The sidebar's project payload has no remote; the editor only
+                // uses it for an explanatory line, and refetching resolves it.
+                gitRemoteUrl={null}
+                icon={icons[editingProject.id]}
+                onChanged={refresh}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={deleting !== null}
+          onOpenChange={(open) => !open && setDeleting(null)}
+        >
+          <DialogContent className="sm:max-w-md">
+            {deletingGroup === null ? null : (
+              <DeleteProjectDialog
+                // A fresh dialog per project: the confirmation must never open
+                // already half-answered from the last time.
+                key={deletingGroup.projectId}
+                projectName={deletingGroup.projectName}
+                threadCount={deletingGroup.threadCount}
+                onCancel={() => setDeleting(null)}
+                onConfirm={async () => {
+                  await deleteProject(deletingGroup.projectId);
+                  setDeleting(null);
+                  toast.success(`Deleted ${deletingGroup.projectName}.`);
+                }}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
-
-      <Dialog
-        open={editing !== null}
-        onOpenChange={(open) => !open && setEditing(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Project icon</DialogTitle>
-          </DialogHeader>
-          {editingProject === null ? null : (
-            <IconEditor
-              projectId={editingProject.id}
-              projectName={editingProject.name}
-              // The sidebar's project payload has no remote; the editor only
-              // uses it for an explanatory line, and refetching resolves it.
-              gitRemoteUrl={null}
-              icon={icons[editingProject.id]}
-              onChanged={refresh}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={deleting !== null}
-        onOpenChange={(open) => !open && setDeleting(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          {deletingGroup === null ? null : (
-            <DeleteProjectDialog
-              // A fresh dialog per project: the confirmation must never open
-              // already half-answered from the last time.
-              key={deletingGroup.projectId}
-              projectName={deletingGroup.projectName}
-              threadCount={deletingGroup.threadCount}
-              onCancel={() => setDeleting(null)}
-              onConfirm={async () => {
-                await deleteProject(deletingGroup.projectId);
-                setDeleting(null);
-                toast.success(`Deleted ${deletingGroup.projectName}.`);
-              }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
+    </ThreadSelectionProvider>
   );
 }
 

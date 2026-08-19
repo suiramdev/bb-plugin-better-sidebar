@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { threadSubtitle, threadTitle, type ThreadNode } from "./grouping";
 import { PullRequestBadge } from "./PullRequestBadge";
 import { RowContextMenu } from "./RowContextMenu";
+import { useThreadSelection } from "./SelectionContext";
 import { StatusGlyph } from "./StatusGlyph";
 
 /** Indent per nesting level, matched to the 16px icon column above it. */
@@ -64,6 +65,8 @@ export function ThreadRow({
   children?: ReactNode;
 }) {
   const actions = useSidebarThreadActions();
+  const selection = useThreadSelection();
+  const isSelected = selection.isSelected(node.thread.id);
   const { splitProps, layout } = useSidebarThreadSplit(node.thread.id);
   const title = threadTitle(node.thread);
   const subtitle = showBranch ? threadSubtitle(node.thread) : null;
@@ -78,6 +81,14 @@ export function ThreadRow({
             isActive ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60",
             // A thread open in another pane reads as present but not focused.
             !isActive && layout !== null && "bg-sidebar-accent/30",
+            // Picked rows carry an inset ring rather than a third background
+            // tint: the active row already owns the strongest tint, and a
+            // fourth shade of the same colour would be unreadable next to it.
+            isSelected &&
+              "bg-sidebar-accent/50 ring-1 ring-inset ring-timeline-accent/60",
+            // A range-click on text otherwise paints a browser text selection
+            // across half the list.
+            selection.count > 0 && "select-none",
           )}
           style={{ marginLeft: depth * INDENT_PX }}
         >
@@ -114,8 +125,26 @@ export function ThreadRow({
             }
             aria-current={isActive ? "page" : undefined}
             {...splitProps}
+            data-selected={isSelected ? "" : undefined}
+            // Shift-clicking an anchor otherwise starts a text selection
+            // before the click handler ever runs.
+            onMouseDown={(event) => {
+              if (event.shiftKey) event.preventDefault();
+            }}
             onClick={(event) => {
               event.preventDefault();
+              // Shift picks a range, Alt picks one row — neither navigates,
+              // because the point of picking rows is to act on them together.
+              // Meta/Ctrl stays with the split, which it already meant here.
+              if (event.shiftKey) {
+                selection.extend(node.thread.id);
+                return;
+              }
+              if (event.altKey) {
+                selection.toggle(node.thread.id);
+                return;
+              }
+              selection.clear();
               actions.open(node.thread.id, {
                 split: event.metaKey || event.ctrlKey,
               });
