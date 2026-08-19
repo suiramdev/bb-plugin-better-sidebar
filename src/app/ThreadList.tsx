@@ -30,6 +30,13 @@ import { useSidebarData } from "./useSidebarData";
 
 const COLLAPSED_STORAGE_KEY = "better-sidebar.collapsed-projects";
 
+/**
+ * The quiet group collapses like a project does, so it rides in the same
+ * persisted set. No BB project id can collide with this: they are `proj_`-
+ * prefixed, and an `@` is not a character one can contain.
+ */
+const QUIET_SECTION_KEY = "@quiet-projects";
+
 function readCollapsed(): Set<string> {
   try {
     const raw = localStorage.getItem(COLLAPSED_STORAGE_KEY);
@@ -165,6 +172,8 @@ export function ThreadList({
   // through it. Inside each half the chosen sort still decides the order.
   const active = groups.filter((group) => group.threadCount > 0);
   const quiet = groups.filter((group) => group.threadCount === 0);
+  // A search shows what it found, whatever the user collapsed.
+  const isQuietCollapsed = !isSearching && collapsed.has(QUIET_SECTION_KEY);
 
   const renderSection = (group: ProjectGroup, isQuiet: boolean) => (
     <ProjectSection
@@ -231,20 +240,35 @@ export function ThreadList({
           <>
             {active.map((group) => renderSection(group, false))}
             {quiet.length > 0 ? (
-              <div
-                // A heading, not a bare rule: it names what follows for a screen
-                // reader, where dimmed rows say nothing at all.
-                role="heading"
-                aria-level={2}
+              <button
+                type="button"
+                onClick={() => toggle(QUIET_SECTION_KEY)}
+                aria-expanded={!isQuietCollapsed}
                 className={cn(
-                  "mt-3 px-2 pb-0.5 pt-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground/50",
+                  "group/quiet mt-3 flex w-full items-center gap-1.5 rounded-md px-2 pb-0.5 pt-2 text-left",
+                  "text-2xs font-semibold uppercase tracking-wide text-muted-foreground/50",
+                  "hover:bg-sidebar-accent/60 hover:text-muted-foreground",
                   active.length > 0 && "border-t border-border/60",
                 )}
               >
-                No threads yet
-              </div>
+                {/* A heading, not a bare rule: it names what follows for a
+                    screen reader, where dimmed rows say nothing at all. */}
+                <span role="heading" aria-level={2} className="min-w-0 flex-1 truncate">
+                  No threads yet
+                </span>
+                <span className="shrink-0 tabular-nums">{quiet.length}</span>
+                <Icon
+                  name="ChevronDown"
+                  className={cn(
+                    "size-3 shrink-0 transition-transform",
+                    isQuietCollapsed && "-rotate-90",
+                  )}
+                />
+              </button>
             ) : null}
-            {quiet.map((group) => renderSection(group, true))}
+            {isQuietCollapsed
+              ? null
+              : quiet.map((group) => renderSection(group, true))}
           </>
         )}
       </div>

@@ -471,6 +471,28 @@ test("a project with no threads is still listed, dimmed and below the rest", asy
   expect(slot.getByLabelText("bb").querySelector(".opacity-55")).toBeNull();
 });
 
+test("the quiet group collapses, and stays collapsed on the next mount", async () => {
+  localStorage.clear();
+  const slot = await mountList({}, { sidebarThreads: WITH_QUIET_PROJECT });
+  await slot.findByLabelText("docs");
+
+  // It counts what it hides, so a collapsed group is not a mystery.
+  const toggle = slot.getByRole("button", { name: /No threads yet/ });
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(toggle.textContent).toContain("1");
+
+  fireEvent.click(toggle);
+  await vi.waitFor(() => expect(slot.queryByLabelText("docs")).toBeNull());
+  // The heading survives its own collapse; the projects with threads do too.
+  expect(slot.getByRole("button", { name: /No threads yet/ }).getAttribute("aria-expanded")).toBe("false");
+  expect(slot.getByLabelText("bb")).toBeTruthy();
+
+  mounted.pop()!.lifecycle.unmount();
+  const remounted = await mountList({}, { sidebarThreads: WITH_QUIET_PROJECT });
+  await remounted.findByText("bb");
+  expect(remounted.queryByLabelText("docs")).toBeNull();
+  localStorage.clear();
+});
 test("every project carries an actions button that opens the project menu", async () => {
   const slot = await mountList({}, { sidebarThreads: WITH_QUIET_PROJECT });
   await slot.findByText("bb");
