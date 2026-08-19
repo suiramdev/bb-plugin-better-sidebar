@@ -55,7 +55,10 @@ function host(settings: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  vi.stubGlobal("fetch", vi.fn(async () => imageResponse()));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => imageResponse()),
+  );
 });
 
 test("overview lists every project, personal included, with its icon", async () => {
@@ -140,7 +143,9 @@ test("the nightly sweep resolves icons for every project with a remote", async (
   await harness.behavior.runSchedule("sweep");
   const result = (await harness.behavior.callRpc("sidebar", {
     projectIds: ["proj_1", "proj_personal"],
-  })) as { icons: Record<string, { dataUrl: string | null; error: string | null }> };
+  })) as {
+    icons: Record<string, { dataUrl: string | null; error: string | null }>;
+  };
   expect(result.icons.proj_1!.dataUrl).toBe(PIXEL_DATA_URL);
   expect(result.icons.proj_personal!.dataUrl).toBeNull();
   expect(result.icons.proj_personal!.error).toBeNull();
@@ -198,8 +203,20 @@ test("the sidebar payload carries bb's project order and the sort mode", async (
   expect(result.preferences).toEqual({ projectSort: "activity" });
   // The personal project sits outside bb's order, so it carries no position.
   expect(result.projects).toEqual([
-    { id: "proj_1", name: "bb", isPersonal: false, createdAt: 1_000, position: 0 },
-    { id: "proj_2", name: "billing", isPersonal: false, createdAt: 2_000, position: 1 },
+    {
+      id: "proj_1",
+      name: "bb",
+      isPersonal: false,
+      createdAt: 1_000,
+      position: 0,
+    },
+    {
+      id: "proj_2",
+      name: "billing",
+      isPersonal: false,
+      createdAt: 2_000,
+      position: 1,
+    },
     {
       id: "proj_personal",
       name: "Personal",
@@ -279,10 +296,62 @@ test("the personal project cannot be dragged into bb's order", async () => {
   expect(reorder).not.toHaveBeenCalled();
 });
 
+test("deleting a project removes it and returns the order without it", async () => {
+  const remaining = PROJECTS.filter((project) => project.id !== "proj_2");
+  const remove = vi.fn(async (_args: { projectId: string }) => ({
+    ok: true as const,
+  }));
+  let listed = PROJECTS;
+  const { bb, harness } = createFakePluginHost({
+    pluginId: "better-sidebar",
+    sdk: {
+      projects: {
+        list: async () => listed,
+        reorder: async () => PROJECTS,
+        delete: async (args: { projectId: string }) => {
+          listed = remaining;
+          return remove(args);
+        },
+      },
+    },
+  });
+  await plugin(bb);
+  const result = (await harness.behavior.callRpc("deleteProject", {
+    projectId: "proj_2",
+  })) as { projects: { id: string }[] };
+  expect(remove).toHaveBeenCalledWith({ projectId: "proj_2" });
+  expect(result.projects.map((project) => project.id)).toEqual([
+    "proj_1",
+    "proj_personal",
+  ]);
+});
+
+test("the personal project cannot be deleted", async () => {
+  const remove = vi.fn(async (_args: { projectId: string }) => ({
+    ok: true as const,
+  }));
+  const { bb, harness } = createFakePluginHost({
+    pluginId: "better-sidebar",
+    sdk: {
+      projects: {
+        list: async () => PROJECTS,
+        reorder: async () => PROJECTS,
+        delete: remove,
+      },
+    },
+  });
+  await plugin(bb);
+  await expect(
+    harness.behavior.callRpc("deleteProject", { projectId: "proj_personal" }),
+  ).rejects.toThrow();
+  expect(remove).not.toHaveBeenCalled();
+});
 test("the CLI shows and sets the project sort", async () => {
   const { bb, harness } = host();
   await plugin(bb);
-  expect((await harness.behavior.runCli(["sort"])).stdout).toContain("* activity");
+  expect((await harness.behavior.runCli(["sort"])).stdout).toContain(
+    "* activity",
+  );
   await harness.behavior.runCli(["sort", "manual"]);
   const result = (await harness.behavior.callRpc("sidebar", {
     projectIds: [],

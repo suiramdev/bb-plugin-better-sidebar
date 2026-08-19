@@ -26,19 +26,46 @@ test("threads group by project, most recently active group first", () => {
     makeThread({ id: "old", projectId: "proj_1", latestAttentionAt: 10 }),
     makeThread({ id: "new", projectId: "proj_2", latestAttentionAt: 99 }),
   ]);
-  expect(groups.map((group) => group.projectId)).toEqual(["proj_2", "proj_1"]);
+  // Every project is listed; the silent one simply has nothing to be recent
+  // about, so it lands last.
+  expect(groups.map((group) => group.projectId)).toEqual([
+    "proj_2",
+    "proj_1",
+    "proj_personal",
+  ]);
   expect(groups[1]!.projectName).toBe("bb");
 });
 
-test("the project in view is shown even with no threads, but does not jump the queue", () => {
+test("a project with no threads keeps its row rather than disappearing", () => {
+  const groups = build([
+    makeThread({ id: "a", projectId: "proj_1", latestAttentionAt: 99 }),
+  ]);
+  const quiet = groups.find((group) => group.projectId === "proj_2");
+  expect(quiet?.projectName).toBe("billing");
+  expect(quiet?.threadCount).toBe(0);
+});
+
+test("the project in view does not jump the queue", () => {
   const groups = build(
     [makeThread({ id: "a", projectId: "proj_1", latestAttentionAt: 99 })],
     { activeProjectId: "proj_2" },
   );
   // Opening a project is not activity, so proj_2 stays where its silence puts
-  // it — present for its header and icon, last for its lack of attention.
-  expect(groups.map((group) => group.projectId)).toEqual(["proj_1", "proj_2"]);
+  // it — present for its header and icon, after the project with threads.
+  expect(groups.map((group) => group.projectId)).toEqual([
+    "proj_1",
+    "proj_2",
+    "proj_personal",
+  ]);
   expect(groups[1]!.threadCount).toBe(0);
+});
+
+test("a search drops the projects it found nothing in", () => {
+  const groups = build(
+    [makeThread({ id: "a", projectId: "proj_1", title: "Fix the flake" })],
+    { searchQuery: "flake" },
+  );
+  expect(groups.map((group) => group.projectId)).toEqual(["proj_1"]);
 });
 
 test("reading or writing a thread in the background never reorders a group", () => {
@@ -53,7 +80,10 @@ test("reading or writing a thread in the background never reorders a group", () 
     }),
     makeThread({ id: "stopped", projectId: "proj_2", latestAttentionAt: 50 }),
   ]);
-  expect(groups.map((group) => group.projectId)).toEqual(["proj_2", "proj_1"]);
+  expect(groups.slice(0, 2).map((group) => group.projectId)).toEqual([
+    "proj_2",
+    "proj_1",
+  ]);
 });
 
 test("pinned threads sit in their own bucket, still by recency", () => {
@@ -93,7 +123,8 @@ test("an orphan whose parent is gone is listed as a root", () => {
 
 test("archived threads never appear", () => {
   const groups = build([makeThread({ id: "gone", isArchived: true })]);
-  expect(groups).toEqual([]);
+  // The projects still list; the archived thread is in none of them.
+  expect(groups.every((group) => group.threadCount === 0)).toBe(true);
 });
 
 test("a search keeps a matching child and its parent as context", () => {

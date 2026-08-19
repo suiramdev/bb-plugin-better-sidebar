@@ -159,7 +159,12 @@ export function buildGroups({
     return group;
   };
 
-  if (activeProjectId !== null && projectById.has(activeProjectId)) {
+  // Every project owns a row, threads or not: the sidebar is how you reach a
+  // project, so a quiet one must not disappear from it. A search is the one
+  // exception — it answers a question, and an empty project answers nothing.
+  if (searchQuery.trim() === "") {
+    for (const project of projects) groupFor(project.id);
+  } else if (activeProjectId !== null && projectById.has(activeProjectId)) {
     groupFor(activeProjectId);
   }
 

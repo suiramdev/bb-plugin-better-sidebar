@@ -15,7 +15,13 @@ const FEATURES = {
 
 const PROJECT_ORDER = [
   { id: "proj_1", name: "bb", isPersonal: false, createdAt: 200, position: 0 },
-  { id: "proj_2", name: "billing", isPersonal: false, createdAt: 100, position: 1 },
+  {
+    id: "proj_2",
+    name: "billing",
+    isPersonal: false,
+    createdAt: 100,
+    position: 1,
+  },
 ];
 
 function sidebarRpc(overrides: Record<string, unknown> = {}) {
@@ -26,8 +32,11 @@ function sidebarRpc(overrides: Record<string, unknown> = {}) {
       projects: PROJECT_ORDER,
       icons: { proj_1: icon(), proj_2: icon({ dataUrl: null, mode: "none" }) },
     }),
-    setProjectSort: (input: { projectSort: string }) => ({ preferences: input }),
+    setProjectSort: (input: { projectSort: string }) => ({
+      preferences: input,
+    }),
     moveProject: () => ({ projects: PROJECT_ORDER }),
+    deleteProject: () => ({ projects: PROJECT_ORDER.slice(0, 1) }),
     ...overrides,
   };
 }
@@ -90,7 +99,11 @@ function fireDrag(
   type: "dragstart" | "dragover" | "drop",
   { clientY = 0, dataTransfer }: { clientY?: number; dataTransfer: unknown },
 ): void {
-  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientY });
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientY,
+  });
   Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
   // Through fireEvent, so React's state updates flush inside act().
   fireEvent(element, event);
@@ -156,7 +169,9 @@ async function mountList(
 test("the plugin registers a thread list, a settings section, and the favicon script", async () => {
   const app = await loadPluginApp(() => import("./app"));
   expect(app.threadLists.map((entry) => entry.id)).toEqual(["projects"]);
-  expect(app.settingsSections.map((entry) => entry.id)).toEqual(["project-icons"]);
+  expect(app.settingsSections.map((entry) => entry.id)).toEqual([
+    "project-icons",
+  ]);
   expect(app.contentScripts.map((entry) => entry.id)).toEqual(["tab-favicon"]);
 });
 
@@ -280,7 +295,9 @@ test("the settings section lists projects and opens the icon editor", async () =
   expect(slot.getByText("No git remote")).toBeTruthy();
 
   slot.getAllByRole("button", { name: "Change" })[0]!.click();
-  expect(await slot.findByRole("radio", { name: "From the repository" })).toBeTruthy();
+  expect(
+    await slot.findByRole("radio", { name: "From the repository" }),
+  ).toBeTruthy();
 
   // "No icon" needs nothing more from the user, so it applies immediately.
   slot.getByRole("radio", { name: "No icon" }).click();
@@ -426,3 +443,146 @@ test("a project is not draggable outside manual mode", async () => {
   const headers = await slot.findAllByRole("button", { expanded: true });
   expect(headers[0]!.getAttribute("draggable")).toBe("false");
 });
+
+/** The same fixture plus "docs", a project nobody has started a thread in. */
+const WITH_QUIET_PROJECT = {
+  threads: THREADS,
+  projects: [
+    ...SIDEBAR_THREADS.projects,
+    makeProject({ id: "proj_3", name: "docs" }),
+  ],
+};
+
+test("a project with no threads is still listed, dimmed and below the rest", async () => {
+  const slot = await mountList({}, { sidebarThreads: WITH_QUIET_PROJECT });
+  const quiet = await slot.findByLabelText("docs");
+
+  // Last in the list, under a heading that says why it is set apart.
+  const sections = [...slot.container.querySelectorAll("section")];
+  expect(sections[sections.length - 1]).toBe(quiet);
+  const heading = slot.getByRole("heading", { name: "No threads yet" });
+  expect(
+    heading.compareDocumentPosition(quiet) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+
+  // Dimmed, and dimmed only here: the projects with threads stay at full
+  // strength.
+  expect(quiet.querySelector(".opacity-55")).toBeTruthy();
+  expect(slot.getByLabelText("bb").querySelector(".opacity-55")).toBeNull();
+});
+
+test("every project carries an actions button that opens the project menu", async () => {
+  const slot = await mountList({}, { sidebarThreads: WITH_QUIET_PROJECT });
+  await slot.findByText("bb");
+  expect(
+    slot
+      .getAllByRole("button", { name: /^Actions for / })
+      .map((button) => button.getAttribute("aria-label")),
+  ).toEqual(["Actions for bb", "Actions for billing", "Actions for docs"]);
+
+  // Radix opens on pointerdown, not click.
+  fireEvent.pointerDown(slot.getByLabelText("Actions for docs"), {
+    button: 0,
+    ctrlKey: false,
+  });
+  const newThread = await slot.findByRole("menuitem", {
+    name: "New thread here",
+  });
+  expect(
+    slot.getByRole("menuitem", { name: "Set project icon…" }),
+  ).toBeTruthy();
+
+  newThread.click();
+  expect(slot.inspection.sidebarActionCalls).toContainEqual(
+    expect.objectContaining({
+      method: "openNewThread",
+      options: { projectId: "proj_3" },
+    }),
+  );
+});
+
+/** Opens a project's actions menu and picks "Delete project…". */
+async function openDeleteFlow(slot: Awaited<ReturnType<typeof mountList>>) {
+  await slot.findByText("billing");
+  // Radix opens on pointerdown, not click.
+  fireEvent.pointerDown(slot.getByLabelText("Actions for billing"), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(
+    await slot.findByRole("menuitem", { name: "Delete project…" }),
+  );
+}
+
+test("deleting a project takes two confirmations before anything is deleted", async () => {
+  const slot = await mountList();
+  await openDeleteFlow(slot);
+
+  // First confirmation: what will happen, and what will not.
+  expect(await slot.findByText("Delete billing?")).toBeTruthy();
+  expect(slot.getByText(/Its thread will be deleted with it/)).toBeTruthy();
+  expect(slot.getByText(/files on disk are not touched/)).toBeTruthy();
+  // No destructive button yet, and nothing has been asked of the backend.
+  expect(slot.queryByRole("button", { name: "Delete billing" })).toBeNull();
+  expect(deleteCalls(slot)).toEqual([]);
+
+  // Second confirmation: the consequence, and only now the destructive button.
+  fireEvent.click(slot.getByRole("button", { name: "Continue" }));
+  expect(await slot.findByText("This cannot be undone")).toBeTruthy();
+  expect(deleteCalls(slot)).toEqual([]);
+
+  fireEvent.click(slot.getByRole("button", { name: "Delete billing" }));
+  await vi.waitFor(() =>
+    expect(deleteCalls(slot)).toEqual([{ projectId: "proj_2" }]),
+  );
+});
+
+test("backing out of either confirmation deletes nothing", async () => {
+  const slot = await mountList();
+  await openDeleteFlow(slot);
+
+  // Out of the first screen.
+  fireEvent.click(slot.getByRole("button", { name: "Cancel" }));
+  await vi.waitFor(() =>
+    expect(slot.queryByText("Delete billing?")).toBeNull(),
+  );
+
+  // And back out of the second, which returns to the first rather than closing.
+  await openDeleteFlow(slot);
+  fireEvent.click(slot.getByRole("button", { name: "Continue" }));
+  fireEvent.click(await slot.findByRole("button", { name: "Back" }));
+  expect(await slot.findByText("Delete billing?")).toBeTruthy();
+  expect(deleteCalls(slot)).toEqual([]);
+});
+
+test("the personal project is not offered for deletion", async () => {
+  const slot = await mountList(
+    {},
+    {
+      sidebarThreads: {
+        threads: THREADS,
+        projects: [
+          ...SIDEBAR_THREADS.projects,
+          makeProject({ id: "proj_me", name: "Personal", isPersonal: true }),
+        ],
+      },
+    },
+  );
+  await slot.findByText("Personal");
+  fireEvent.pointerDown(slot.getByLabelText("Actions for Personal"), {
+    button: 0,
+    ctrlKey: false,
+  });
+  expect(
+    await slot.findByRole("menuitem", { name: "New thread here" }),
+  ).toBeTruthy();
+  expect(slot.queryByRole("menuitem", { name: "Delete project…" })).toBeNull();
+});
+
+function deleteCalls(slot: {
+  inspection: { rpcCalls: { method: string; input: unknown }[] };
+}) {
+  return slot.inspection.rpcCalls
+    .filter((call) => call.method === "deleteProject")
+    .map((call) => call.input);
+}

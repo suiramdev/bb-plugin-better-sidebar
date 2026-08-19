@@ -16,6 +16,7 @@ import {
   writePreferences,
   type Preferences,
 } from "./src/preferences";
+import { projectNameFromPath } from "./src/project-name";
 import { resolveProjectMove } from "./src/reorder";
 import type { FetchLike } from "./src/resolve-icon";
 import { runCli } from "./src/cli";
@@ -113,7 +114,9 @@ export default async function plugin(bb: BbPluginApi) {
   bb.rpc.register(rpcContract, {
     overview: async () => {
       const projects = await allProjects();
-      const resolved = await icons.iconsFor(projects.map((project) => project.id));
+      const resolved = await icons.iconsFor(
+        projects.map((project) => project.id),
+      );
       return {
         features: await features(),
         preferences: await preferences(),
@@ -160,6 +163,37 @@ export default async function plugin(bb: BbPluginApi) {
     refreshIcon: async ({ projectId }) => ({
       icon: await icons.refresh(projectId),
     }),
+    addProject: async () => {
+      // The picker and the project both live on a host, and only a connected
+      // one can show a dialog or read the folder afterwards.
+      const hosts = await bb.sdk.hosts.list();
+      const host = hosts.find((entry) => entry.status === "connected");
+      if (host === undefined)
+        throw new Error("No connected host to add a project from.");
+      const { path } = await bb.sdk.hosts.pickFolder({
+        hostId: host.id,
+        clientHostId: host.id,
+      });
+      // Cancelling the dialog is an answer, not a failure.
+      if (path === null) return { projectId: null, name: null };
+      const project = await bb.sdk.projects.create({
+        name: projectNameFromPath(path),
+        source: { type: "local_path", hostId: host.id, path },
+      });
+      return { projectId: project.id, name: project.name };
+    },
+    deleteProject: async ({ projectId }) => {
+      const projects = await allProjects();
+      const project = projects.find((entry) => entry.id === projectId);
+      if (project === undefined) throw new Error("No such project.");
+      // BB's personal project is a fixture of the app, not a project the user
+      // created; the menu hides this, and the server does not rely on that.
+      if (project.kind === "personal") {
+        throw new Error("The personal project cannot be deleted.");
+      }
+      await bb.sdk.projects.delete({ projectId });
+      return { projects: await projectOrder() };
+    },
   });
 
   // Lazy resolution covers a fresh install (the first sidebar read resolves

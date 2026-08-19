@@ -4,11 +4,7 @@
  */
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import {
-  ICON_ORIGINS,
-  iconDataUrlSchema,
-  iconModeSchema,
-} from "./icon-record";
+import { ICON_ORIGINS, iconDataUrlSchema, iconModeSchema } from "./icon-record";
 import { preferencesSchema, projectSortSchema } from "./preferences";
 
 /** One project's icon as the frontend sees it. */
@@ -122,5 +118,26 @@ export const rpcContract = defineRpcContract({
   refreshIcon: {
     input: z.object({ projectId: z.string().min(1) }).strict(),
     output: z.object({ icon: publicIconSchema }),
+  },
+  /**
+   * Add a project from a folder the user picks on the host. The picker is the
+   * host's own native dialog, so the plugin never handles a path by hand; a
+   * cancelled pick returns a null project rather than an error.
+   */
+  addProject: {
+    input: z.null(),
+    output: z.object({
+      projectId: z.string().nullable(),
+      name: z.string().nullable(),
+    }),
+  },
+  /**
+   * Remove a project from BB, threads and all. Irreversible, so the frontend
+   * asks twice — and the personal project is refused outright, here as well as
+   * in the menu, because it is not the user's to delete.
+   */
+  deleteProject: {
+    input: z.object({ projectId: z.string().min(1) }).strict(),
+    output: z.object({ projects: z.array(projectOrderEntrySchema) }),
   },
 });
