@@ -253,7 +253,11 @@ export function ThreadList({
               >
                 {/* A heading, not a bare rule: it names what follows for a
                     screen reader, where dimmed rows say nothing at all. */}
-                <span role="heading" aria-level={2} className="min-w-0 flex-1 truncate">
+                <span
+                  role="heading"
+                  aria-level={2}
+                  className="min-w-0 flex-1 truncate"
+                >
                   No threads yet
                 </span>
                 <span className="shrink-0 tabular-nums">{quiet.length}</span>

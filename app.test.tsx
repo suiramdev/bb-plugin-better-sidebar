@@ -484,7 +484,11 @@ test("the quiet group collapses, and stays collapsed on the next mount", async (
   fireEvent.click(toggle);
   await vi.waitFor(() => expect(slot.queryByLabelText("docs")).toBeNull());
   // The heading survives its own collapse; the projects with threads do too.
-  expect(slot.getByRole("button", { name: /No threads yet/ }).getAttribute("aria-expanded")).toBe("false");
+  expect(
+    slot
+      .getByRole("button", { name: /No threads yet/ })
+      .getAttribute("aria-expanded"),
+  ).toBe("false");
   expect(slot.getByLabelText("bb")).toBeTruthy();
 
   mounted.pop()!.lifecycle.unmount();
