@@ -7,6 +7,8 @@ tab.
 - **Threads grouped by project.** Collapsible project sections, pinned threads
   first, child threads nested under their parent, and BB's own status glyphs on
   each row.
+- **Order the projects your way.** Last activity, alphabetical, newest, oldest,
+  or manual — drag the project headers into the order you want.
 - **A project icon, resolved for you.** By default a project's icon comes from
   its repository: the GitHub account avatar, a GitLab project avatar, or the git
   host's favicon. No configuration, no token.
@@ -45,6 +47,32 @@ a success is trusted for a week, a failure is retried after six hours, and a
 project whose git remote changed is resolved again. One nightly sweep keeps
 long-lived icons honest. Nothing is ever fetched for a project with no remote.
 
+## Ordering projects
+
+The sort control sits above the list, and the same menu is on the plugin's
+settings page:
+
+| Mode                       | Order                                                                       |
+| -------------------------- | --------------------------------------------------------------------------- |
+| Last activity _(default)_  | Most recent attention first, and the project you are in leads.               |
+| Manual                     | Your own order — drag a project header, or use its right-click menu.         |
+| Alphabetical               | By name, case-insensitive.                                                   |
+| Newest project first        | By project creation date, newest first.                                      |
+| Oldest project first        | By project creation date, oldest first.                                     |
+
+Only "Last activity" floats the project you are viewing to the top: in an order
+you chose, a group jumping around because of the route would be the sidebar
+disobeying you.
+
+**Manual order is BB's own project order.** Dragging a project here calls BB's
+`projects.reorder`, so BB's built-in sidebar shows the same order and there is
+no second, drifting copy of it. Reordering never depends on drag alone — every
+project header's right-click menu has **Move project up / down** — and the
+personal project stays put, because BB keeps it outside that order.
+
+Threads inside a group always read newest-attention-first, with pinned threads
+above; only the project order is configurable.
+
 ## Settings
 
 Each visual feature is a toggle on the plugin's settings page:
@@ -65,6 +93,8 @@ bb better-sidebar set bb --url https://…      # a project can be named instead
 bb better-sidebar set bb --auto               # back to the repository default
 bb better-sidebar set bb --none               # no icon
 bb better-sidebar refresh bb                  # re-fetch now
+bb better-sidebar sort                        # show the modes, with the active one starred
+bb better-sidebar sort manual                 # activity | manual | alphabetical | newest | oldest
 ```
 
 Uploads are deliberately not in the CLI: the command runs on the server, so a
@@ -81,8 +111,9 @@ the plugin restores exactly the hrefs it found.
 
 **This list is not a clone of BB's.** It shows what a plugin sidebar can see:
 projects, threads, pinning, unread state, status indicators, branches, and pull
-requests. Thread sections and drag-to-reorder are BB-owned features this list
-does not draw; threads that live in a section appear in their project's group.
+requests. Thread sections are a BB-owned feature this list does not draw;
+threads that live in a section appear in their project's group, and reordering
+applies to projects rather than to individual threads.
 Everything destructive still routes through BB — deleting a thread opens BB's
 own confirmation.
 
@@ -102,7 +133,8 @@ Run the suite on Node 22 (`fnm use 22`) if your default is newer.
 Layout: `server.ts` and `app.tsx` are wiring. The rules live in `src/` —
 `git-remote.ts` and `icon-sources.ts` decide where to look, `resolve-icon.ts`
 does the fetching, `icon-service.ts` holds the caching and freshness rules,
-`src/app/grouping.ts` is the list's ordering and search, and
+`src/app/grouping.ts` is the list's grouping, sorting, and search,
+`src/reorder.ts` turns a drop into BB's neighbour-based move, and
 `src/app/favicon.ts` owns the tab icon.
 
 ## License

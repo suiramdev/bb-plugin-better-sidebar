@@ -145,3 +145,86 @@ test("the subtitle prefers a branch and falls back to the machine", () => {
   );
   expect(threadSubtitle(makeThread({ id: "a" }))).toBeNull();
 });
+
+const ORDER = [
+  { id: "proj_1", name: "bb", isPersonal: false, createdAt: 300, position: 2 },
+  { id: "proj_2", name: "billing", isPersonal: false, createdAt: 100, position: 0 },
+  {
+    id: "proj_personal",
+    name: "Personal",
+    isPersonal: true,
+    createdAt: 200,
+    position: null,
+  },
+];
+
+const SPREAD = [
+  makeThread({ id: "a", projectId: "proj_1", latestAttentionAt: 10 }),
+  makeThread({ id: "b", projectId: "proj_2", latestAttentionAt: 90 }),
+  makeThread({ id: "c", projectId: "proj_personal", latestAttentionAt: 50 }),
+];
+
+function order(sort: Parameters<typeof buildGroups>[0]["sort"], activeProjectId = null) {
+  return buildGroups({
+    threads: SPREAD,
+    projects: PROJECTS,
+    projectOrder: ORDER,
+    sort,
+    searchQuery: "",
+    activeProjectId,
+  }).map((group) => group.projectId);
+}
+
+test("activity sorts by the most recent attention, with the project in view first", () => {
+  expect(order("activity")).toEqual(["proj_2", "proj_personal", "proj_1"]);
+  expect(order("activity", "proj_1" as never)).toEqual([
+    "proj_1",
+    "proj_2",
+    "proj_personal",
+  ]);
+});
+
+test("alphabetical ignores case and the route", () => {
+  expect(order("alphabetical")).toEqual(["proj_1", "proj_2", "proj_personal"]);
+  expect(order("alphabetical", "proj_2" as never)).toEqual([
+    "proj_1",
+    "proj_2",
+    "proj_personal",
+  ]);
+});
+
+test("newest and oldest follow the project creation date", () => {
+  expect(order("newest")).toEqual(["proj_1", "proj_personal", "proj_2"]);
+  expect(order("oldest")).toEqual(["proj_2", "proj_personal", "proj_1"]);
+});
+
+test("manual follows bb's own project order and parks the personal project last", () => {
+  expect(order("manual")).toEqual(["proj_2", "proj_1", "proj_personal"]);
+});
+
+test("groups expose bb's position so a manual drag knows what it is moving", () => {
+  const groups = buildGroups({
+    threads: SPREAD,
+    projects: PROJECTS,
+    projectOrder: ORDER,
+    sort: "manual",
+    searchQuery: "",
+    activeProjectId: null,
+  });
+  expect(groups.map((group) => group.position)).toEqual([0, 2, null]);
+});
+
+test("without backend metadata every mode still returns a stable order by name", () => {
+  const groups = buildGroups({
+    threads: SPREAD,
+    projects: PROJECTS,
+    sort: "manual",
+    searchQuery: "",
+    activeProjectId: null,
+  });
+  expect(groups.map((group) => group.projectName)).toEqual([
+    "bb",
+    "billing",
+    "Personal",
+  ]);
+});

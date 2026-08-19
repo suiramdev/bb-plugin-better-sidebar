@@ -5,8 +5,18 @@
 // without a bb server.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { ICONS_CHANNEL } from "./src/channels";
-import { rpcContract, type FeatureFlags } from "./src/contract";
+import {
+  rpcContract,
+  type FeatureFlags,
+  type ProjectOrderEntry,
+} from "./src/contract";
 import { IconService, type IconServiceProject } from "./src/icon-service";
+import {
+  readPreferences,
+  writePreferences,
+  type Preferences,
+} from "./src/preferences";
+import { resolveProjectMove } from "./src/reorder";
 import type { FetchLike } from "./src/resolve-icon";
 import { runCli } from "./src/cli";
 
@@ -67,6 +77,28 @@ export default async function plugin(bb: BbPluginApi) {
       gitRemoteUrl: project.gitRemoteUrl,
     }));
 
+  /**
+   * Projects in BB's own order, with the position a manual sort drags. The
+   * personal project sits outside that order, so it carries no position and is
+   * never draggable.
+   */
+  const projectOrder = async (): Promise<ProjectOrderEntry[]> => {
+    let position = 0;
+    return (await allProjects()).map((project) => {
+      const isPersonal = project.kind === "personal";
+      return {
+        id: project.id,
+        name: project.name,
+        isPersonal,
+        createdAt: project.createdAt,
+        position: isPersonal ? null : position++,
+      };
+    });
+  };
+
+  const preferences = async (): Promise<Preferences> =>
+    readPreferences(bb.storage.kv);
+
   const icons = new IconService({
     kv: bb.storage.kv,
     fetchImpl: fetch as unknown as FetchLike,
@@ -84,6 +116,7 @@ export default async function plugin(bb: BbPluginApi) {
       const resolved = await icons.iconsFor(projects.map((project) => project.id));
       return {
         features: await features(),
+        preferences: await preferences(),
         projects: projects.map((project) => ({
           id: project.id,
           name: project.name,
@@ -95,6 +128,8 @@ export default async function plugin(bb: BbPluginApi) {
     },
     sidebar: async ({ projectIds }) => ({
       features: await features(),
+      preferences: await preferences(),
+      projects: await projectOrder(),
       icons: await icons.iconsFor(projectIds),
     }),
     favicon: async ({ projectId }) => {
@@ -104,6 +139,24 @@ export default async function plugin(bb: BbPluginApi) {
       return { enabled: true, dataUrl: icon?.dataUrl ?? null };
     },
     setIcon: async (input) => ({ icon: await icons.setIcon(input) }),
+    setProjectSort: async ({ projectSort }) => ({
+      preferences: await writePreferences(bb.storage.kv, { projectSort }),
+    }),
+    moveProject: async ({ projectId, beforeProjectId }) => {
+      const order = await projectOrder();
+      const move = resolveProjectMove({
+        // Only BB-ordered projects take part; the personal project has no place
+        // in that order to move to or from.
+        orderedProjectIds: order
+          .filter((entry) => entry.position !== null)
+          .map((entry) => entry.id),
+        projectId,
+        beforeProjectId,
+      });
+      if (move === null) return { projects: order };
+      await bb.sdk.projects.reorder({ projectId, ...move });
+      return { projects: await projectOrder() };
+    },
     refreshIcon: async ({ projectId }) => ({
       icon: await icons.refresh(projectId),
     }),
@@ -136,6 +189,12 @@ export default async function plugin(bb: BbPluginApi) {
         summary: "Re-fetch a project's icon now, ignoring the freshness rules",
         usage: "bb better-sidebar refresh <project-id-or-name>",
       },
+      {
+        name: "sort",
+        summary:
+          "Show or set how the sidebar orders projects (activity, manual, alphabetical, newest, oldest)",
+        usage: "bb better-sidebar sort [mode]",
+      },
     ],
     run: async (argv) =>
       runCli(argv, {
@@ -146,6 +205,9 @@ export default async function plugin(bb: BbPluginApi) {
             name: project.name,
             gitRemoteUrl: project.gitRemoteUrl,
           })),
+        readPreferences: preferences,
+        writeProjectSort: (projectSort) =>
+          writePreferences(bb.storage.kv, { projectSort }),
       }),
   });
 }

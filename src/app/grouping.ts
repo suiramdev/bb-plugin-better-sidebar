@@ -9,6 +9,8 @@ import type {
   PluginSidebarProject,
   PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
+import type { ProjectOrderEntry } from "../contract";
+import type { ProjectSort } from "../preferences";
 
 export interface ThreadNode {
   thread: PluginSidebarThread;
@@ -21,6 +23,8 @@ export interface ProjectGroup {
   projectId: string;
   projectName: string;
   isPersonal: boolean;
+  /** Index in BB's manual order; null for the personal project. */
+  position: number | null;
   pinned: ThreadNode[];
   roots: ThreadNode[];
   /** Every thread in the group, nesting included. */
@@ -75,6 +79,12 @@ function countNodes(nodes: readonly ThreadNode[]): number {
 export interface BuildGroupsArgs {
   threads: readonly PluginSidebarThread[];
   projects: readonly PluginSidebarProject[];
+  /**
+   * Creation dates and BB order positions from this plugin's backend, which the
+   * host's sidebar payload does not carry. Missing entries sort last.
+   */
+  projectOrder?: readonly ProjectOrderEntry[];
+  sort?: ProjectSort;
   searchQuery: string;
   /**
    * Kept as an empty group when it has no threads, so the project in view
@@ -91,9 +101,12 @@ export interface BuildGroupsArgs {
 export function buildGroups({
   threads,
   projects,
+  projectOrder = [],
+  sort = "activity",
   searchQuery,
   activeProjectId,
 }: BuildGroupsArgs): ProjectGroup[] {
+  const orderById = new Map(projectOrder.map((entry) => [entry.id, entry]));
   const visible = threads.filter((thread) => !thread.isArchived);
   const byId = new Map(visible.map((thread) => [thread.id, thread]));
   const matched = new Set(
@@ -127,10 +140,12 @@ export function buildGroups({
     const existing = groups.get(projectId);
     if (existing !== undefined) return existing;
     const project = projectById.get(projectId);
+    const entry = orderById.get(projectId);
     const group: ProjectGroup = {
       projectId,
-      projectName: project?.name ?? "Unknown project",
-      isPersonal: project?.isPersonal ?? false,
+      projectName: project?.name ?? entry?.name ?? "Unknown project",
+      isPersonal: project?.isPersonal ?? entry?.isPersonal ?? false,
+      position: entry?.position ?? null,
       pinned: [],
       roots: [],
       threadCount: 0,
@@ -164,11 +179,12 @@ export function buildGroups({
     group.threadCount = countNodes(group.pinned) + countNodes(group.roots);
   }
 
-  return [...groups.values()].sort((left, right) => {
-    // The active project leads; the rest follow their own recency.
-    if (left.projectId === activeProjectId) return -1;
-    if (right.projectId === activeProjectId) return 1;
-    return groupRecency(right) - groupRecency(left);
+  return sortGroups([...groups.values()], {
+    sort,
+    activeProjectId,
+    createdAtById: new Map(
+      projectOrder.map((entry) => [entry.id, entry.createdAt]),
+    ),
   });
 }
 
@@ -177,4 +193,63 @@ function groupRecency(group: ProjectGroup): number {
     (latest, node) => Math.max(latest, node.thread.latestAttentionAt),
     0,
   );
+}
+
+/**
+ * Orders the project groups. Only "activity" floats the project in view to the
+ * top: in an order the user chose — manual, alphabetical, or by creation — a
+ * group jumping because of the route would be the sidebar disobeying them.
+ *
+ * Ties and unknown metadata fall back to the project name, so the list has a
+ * stable order even while the backend read is still in flight.
+ */
+export function sortGroups(
+  groups: readonly ProjectGroup[],
+  {
+    sort,
+    activeProjectId,
+    createdAtById,
+  }: {
+    sort: ProjectSort;
+    activeProjectId: string | null;
+    createdAtById: ReadonlyMap<string, number>;
+  },
+): ProjectGroup[] {
+  const byName = (left: ProjectGroup, right: ProjectGroup): number =>
+    left.projectName.localeCompare(right.projectName, undefined, {
+      sensitivity: "base",
+    });
+  const created = (group: ProjectGroup): number | null =>
+    createdAtById.get(group.projectId) ?? null;
+
+  const compare = (left: ProjectGroup, right: ProjectGroup): number => {
+    switch (sort) {
+      case "manual":
+        // The personal project has no place in BB's order, so it sits last.
+        if (left.position === null || right.position === null) {
+          return (left.position === null ? 1 : 0) - (right.position === null ? 1 : 0);
+        }
+        return left.position - right.position;
+      case "alphabetical":
+        return byName(left, right);
+      case "newest":
+      case "oldest": {
+        const leftCreated = created(left);
+        const rightCreated = created(right);
+        if (leftCreated === null || rightCreated === null) {
+          return (leftCreated === null ? 1 : 0) - (rightCreated === null ? 1 : 0);
+        }
+        return sort === "newest"
+          ? rightCreated - leftCreated
+          : leftCreated - rightCreated;
+      }
+      default: {
+        if (left.projectId === activeProjectId) return -1;
+        if (right.projectId === activeProjectId) return 1;
+        return groupRecency(right) - groupRecency(left);
+      }
+    }
+  };
+
+  return [...groups].sort((left, right) => compare(left, right) || byName(left, right));
 }

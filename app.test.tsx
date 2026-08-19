@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
+import { fireEvent } from "@testing-library/react";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { makeProject, makeThread } from "./src/app/test-fixtures";
 
@@ -12,12 +13,21 @@ const FEATURES = {
   showPullRequests: false,
 };
 
+const PROJECT_ORDER = [
+  { id: "proj_1", name: "bb", isPersonal: false, createdAt: 200, position: 0 },
+  { id: "proj_2", name: "billing", isPersonal: false, createdAt: 100, position: 1 },
+];
+
 function sidebarRpc(overrides: Record<string, unknown> = {}) {
   return {
     sidebar: () => ({
       features: FEATURES,
+      preferences: { projectSort: "activity" },
+      projects: PROJECT_ORDER,
       icons: { proj_1: icon(), proj_2: icon({ dataUrl: null, mode: "none" }) },
     }),
+    setProjectSort: (input: { projectSort: string }) => ({ preferences: input }),
+    moveProject: () => ({ projects: PROJECT_ORDER }),
     ...overrides,
   };
 }
@@ -69,6 +79,51 @@ const SIDEBAR_THREADS = {
     makeProject({ id: "proj_2", name: "billing" }),
   ],
 };
+
+/**
+ * jsdom ships no DragEvent, and `fireEvent.drop` drops the pointer position with
+ * it — which is exactly what decides whether a drop lands above or below a
+ * header. Dispatch a MouseEvent under the drag event's name instead.
+ */
+function fireDrag(
+  element: HTMLElement,
+  type: "dragstart" | "dragover" | "drop",
+  { clientY = 0, dataTransfer }: { clientY?: number; dataTransfer: unknown },
+): void {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientY });
+  Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+  // Through fireEvent, so React's state updates flush inside act().
+  fireEvent(element, event);
+}
+
+function fakeDataTransfer() {
+  return {
+    data: {} as Record<string, string>,
+    effectAllowed: "",
+    dropEffect: "",
+    setData(type: string, value: string) {
+      this.data[type] = value;
+    },
+    getData(type: string) {
+      return this.data[type] ?? "";
+    },
+  };
+}
+
+function stubBounds(element: HTMLElement): void {
+  element.getBoundingClientRect = () =>
+    ({
+      top: 100,
+      height: 20,
+      bottom: 120,
+      left: 0,
+      right: 100,
+      width: 100,
+      x: 0,
+      y: 100,
+      toJSON: () => ({}),
+    }) as DOMRect;
+}
 
 // Slot queries are document-scoped, so every mount is unmounted between tests.
 const mounted: { lifecycle: { unmount: () => void } }[] = [];
@@ -156,12 +211,14 @@ test("the branch is shown, and hidden when the feature is off", async () => {
   const hidden = await mountList(
     {},
     {
-      rpc: {
+      rpc: sidebarRpc({
         sidebar: () => ({
           features: { ...FEATURES, showBranch: false },
+          preferences: { projectSort: "activity" },
+          projects: PROJECT_ORDER,
           icons: {},
         }),
-      },
+      }),
     },
   );
   await hidden.findByText("bb");
@@ -195,6 +252,7 @@ test("the settings section lists projects and opens the icon editor", async () =
       rpc: {
         overview: () => ({
           features: FEATURES,
+          preferences: { projectSort: "activity" },
           projects: [
             {
               id: "proj_1",
@@ -233,4 +291,138 @@ test("the settings section lists projects and opens the icon editor", async () =
       input: { projectId: "proj_1", mode: "none" },
     }),
   );
+});
+
+test("the sort menu offers every mode and stores the choice", async () => {
+  const slot = await mountList();
+  const trigger = await slot.findByLabelText("Sort projects: Last activity");
+  // Radix opens on pointerdown, not click.
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+  const alphabetical = await slot.findByRole("menuitemradio", {
+    name: "Alphabetical",
+  });
+  expect(
+    slot.getAllByRole("menuitemradio").map((item) => item.textContent),
+  ).toEqual([
+    "Last activity",
+    "Manual (drag to reorder)",
+    "Alphabetical",
+    "Newest project first",
+    "Oldest project first",
+  ]);
+
+  alphabetical.click();
+  await slot.findByLabelText("Sort projects: Alphabetical");
+  expect(slot.inspection.rpcCalls).toContainEqual(
+    expect.objectContaining({
+      method: "setProjectSort",
+      input: { projectSort: "alphabetical" },
+    }),
+  );
+});
+
+test("the chosen sort mode orders the project groups", async () => {
+  // "bb" holds the most recent thread and is the newer project, so activity
+  // leads with it; "oldest" turns the list around.
+  const activity = await mountList();
+  await activity.findByText("billing");
+  expect(headerNames(activity)[0]).toContain("bb");
+  mounted.pop()!.lifecycle.unmount();
+
+  const oldest = await mountList(
+    {},
+    {
+      rpc: sidebarRpc({
+        sidebar: () => ({
+          features: FEATURES,
+          preferences: { projectSort: "oldest" },
+          projects: PROJECT_ORDER,
+          icons: {},
+        }),
+      }),
+    },
+  );
+  await oldest.findByText("bb");
+  expect(headerNames(oldest)[0]).toContain("billing");
+});
+
+function headerNames(slot: {
+  getAllByRole: (role: string, options?: object) => HTMLElement[];
+}): string[] {
+  return slot
+    .getAllByRole("button", { expanded: true })
+    .map((button) => button.textContent ?? "");
+}
+
+test("manual mode makes project headers draggable and moves them on drop", async () => {
+  const slot = await mountList(
+    {},
+    {
+      rpc: sidebarRpc({
+        sidebar: () => ({
+          features: FEATURES,
+          preferences: { projectSort: "manual" },
+          projects: PROJECT_ORDER,
+          icons: {},
+        }),
+      }),
+    },
+  );
+  const headers = await slot.findAllByRole("button", { expanded: true });
+  const [bb, billing] = headers;
+  expect(bb!.getAttribute("draggable")).toBe("true");
+  stubBounds(bb!);
+
+  // Drop "billing" on the top half of "bb": it lands immediately before it.
+  const dataTransfer = fakeDataTransfer();
+  fireDrag(billing!, "dragstart", { dataTransfer });
+  fireDrag(bb!, "dragover", { dataTransfer, clientY: 104 });
+  fireDrag(bb!, "drop", { dataTransfer, clientY: 104 });
+
+  await vi.waitFor(() =>
+    expect(slot.inspection.rpcCalls).toContainEqual(
+      expect.objectContaining({
+        method: "moveProject",
+        input: { projectId: "proj_2", beforeProjectId: "proj_1" },
+      }),
+    ),
+  );
+});
+
+test("dropping below the last header sends a project to the end", async () => {
+  const slot = await mountList(
+    {},
+    {
+      rpc: sidebarRpc({
+        sidebar: () => ({
+          features: FEATURES,
+          preferences: { projectSort: "manual" },
+          projects: PROJECT_ORDER,
+          icons: {},
+        }),
+      }),
+    },
+  );
+  const headers = await slot.findAllByRole("button", { expanded: true });
+  const last = headers[headers.length - 1]!;
+  stubBounds(last);
+
+  const dataTransfer = fakeDataTransfer();
+  fireDrag(headers[0]!, "dragstart", { dataTransfer });
+  fireDrag(last, "drop", { dataTransfer, clientY: 118 });
+
+  await vi.waitFor(() =>
+    expect(slot.inspection.rpcCalls).toContainEqual(
+      expect.objectContaining({
+        method: "moveProject",
+        input: { projectId: "proj_1", beforeProjectId: null },
+      }),
+    ),
+  );
+});
+
+test("a project is not draggable outside manual mode", async () => {
+  const slot = await mountList();
+  const headers = await slot.findAllByRole("button", { expanded: true });
+  expect(headers[0]!.getAttribute("draggable")).toBe("false");
 });

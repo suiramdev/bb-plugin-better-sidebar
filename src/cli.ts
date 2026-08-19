@@ -5,6 +5,13 @@
  */
 import type { PublicIcon } from "./contract";
 import type { IconMode } from "./icon-record";
+import {
+  PROJECT_SORT_LABELS,
+  PROJECT_SORT_MODES,
+  projectSortSchema,
+  type Preferences,
+  type ProjectSort,
+} from "./preferences";
 
 export interface CliProject {
   id: string;
@@ -30,6 +37,8 @@ export interface CliIcons {
 export interface CliDeps {
   icons: CliIcons;
   listProjects: () => Promise<readonly CliProject[]>;
+  readPreferences: () => Promise<Preferences>;
+  writeProjectSort: (projectSort: ProjectSort) => Promise<Preferences>;
 }
 
 export interface CliResult {
@@ -43,6 +52,7 @@ const USAGE = [
   "  bb better-sidebar list",
   "  bb better-sidebar set <project-id-or-name> --auto | --url <url> | --none",
   "  bb better-sidebar refresh <project-id-or-name>",
+  `  bb better-sidebar sort [${PROJECT_SORT_MODES.join(" | ")}]`,
 ].join("\n");
 
 function describe(icon: PublicIcon): string {
@@ -92,6 +102,30 @@ export async function runCli(
 
   if (command === undefined || command === "help" || command === "--help") {
     return { exitCode: command === undefined ? 1 : 0, stdout: USAGE };
+  }
+
+  if (command === "sort") {
+    const [mode] = rest;
+    if (mode === undefined) {
+      const { projectSort } = await deps.readPreferences();
+      const lines = PROJECT_SORT_MODES.map(
+        (candidate) =>
+          `${candidate === projectSort ? "*" : " "} ${candidate.padEnd(14)}${PROJECT_SORT_LABELS[candidate]}`,
+      );
+      return { exitCode: 0, stdout: lines.join("\n") };
+    }
+    const parsed = projectSortSchema.safeParse(mode);
+    if (!parsed.success) {
+      return {
+        exitCode: 1,
+        stderr: `Unknown sort "${mode}". Choose one of: ${PROJECT_SORT_MODES.join(", ")}.`,
+      };
+    }
+    const next = await deps.writeProjectSort(parsed.data);
+    return {
+      exitCode: 0,
+      stdout: `Projects sort by ${PROJECT_SORT_LABELS[next.projectSort]}.`,
+    };
   }
 
   if (command === "list") {

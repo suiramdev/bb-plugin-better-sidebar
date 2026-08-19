@@ -7,9 +7,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import type { ProjectSummary, rpcContract } from "../contract";
+import {
+  DEFAULT_PREFERENCES,
+  PROJECT_SORT_LABELS,
+  type Preferences,
+  type ProjectSort,
+} from "../preferences";
 import { IconEditor } from "./IconEditor";
 import { ProjectIcon } from "./ProjectIcon";
+import { SortMenu } from "./SortMenu";
 
 /**
  * The plugin's settings page section: every project, its icon, and the editor.
@@ -20,6 +28,7 @@ import { ProjectIcon } from "./ProjectIcon";
 export function SettingsSection() {
   const rpc = useRpc<typeof rpcContract>();
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
+  const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
 
@@ -28,6 +37,7 @@ export function SettingsSection() {
       .call("overview")
       .then((result) => {
         setProjects(result.projects);
+        setPreferences(result.preferences);
         setError(null);
       })
       .catch((cause: unknown) =>
@@ -50,8 +60,31 @@ export function SettingsSection() {
     return <p className="text-sm text-muted-foreground">Loading projects…</p>;
   }
 
+  const changeSort = async (projectSort: ProjectSort): Promise<void> => {
+    setPreferences({ projectSort });
+    try {
+      const result = await rpc.call("setProjectSort", { projectSort });
+      setPreferences(result.preferences);
+    } catch {
+      toast.error("Could not change the sort order.");
+      load();
+    }
+  };
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-sm">Project order</p>
+          <p className="text-xs text-muted-foreground">
+            {preferences.projectSort === "manual"
+              ? "Drag a project header in the sidebar, or use its right-click menu."
+              : `Sorted by ${PROJECT_SORT_LABELS[preferences.projectSort].toLowerCase()}.`}
+          </p>
+        </div>
+        <SortMenu value={preferences.projectSort} onChange={changeSort} />
+      </div>
+
       <ul className="divide-y divide-border rounded-lg border border-border">
         {projects.map((project) => (
           <li key={project.id} className="flex items-center gap-3 px-3 py-2">

@@ -9,6 +9,7 @@ import {
   iconDataUrlSchema,
   iconModeSchema,
 } from "./icon-record";
+import { preferencesSchema, projectSortSchema } from "./preferences";
 
 /** One project's icon as the frontend sees it. */
 export const publicIconSchema = z.object({
@@ -32,6 +33,23 @@ export const projectSummarySchema = z.object({
 });
 export type ProjectSummary = z.infer<typeof projectSummarySchema>;
 
+/**
+ * What the sidebar needs to order projects, which the host's own sidebar
+ * payload does not carry: a creation date, and BB's manual position.
+ */
+export const projectOrderEntrySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  isPersonal: z.boolean(),
+  createdAt: z.number(),
+  /**
+   * Index in BB's project order, or null for the personal project, which sits
+   * outside that order and therefore cannot be dragged.
+   */
+  position: z.number().nullable(),
+});
+export type ProjectOrderEntry = z.infer<typeof projectOrderEntrySchema>;
+
 export const featureFlagsSchema = z.object({
   projectIcons: z.boolean(),
   tabFavicon: z.boolean(),
@@ -46,6 +64,7 @@ export const rpcContract = defineRpcContract({
     input: z.null(),
     output: z.object({
       features: featureFlagsSchema,
+      preferences: preferencesSchema,
       projects: z.array(projectSummarySchema),
     }),
   },
@@ -58,6 +77,9 @@ export const rpcContract = defineRpcContract({
     input: z.object({ projectIds: z.array(z.string()).max(500) }).strict(),
     output: z.object({
       features: featureFlagsSchema,
+      preferences: preferencesSchema,
+      /** Every project in BB's order, so the sidebar can apply any sort mode. */
+      projects: z.array(projectOrderEntrySchema),
       icons: z.record(z.string(), publicIconSchema),
     }),
   },
@@ -78,6 +100,23 @@ export const rpcContract = defineRpcContract({
       })
       .strict(),
     output: z.object({ icon: publicIconSchema }),
+  },
+  setProjectSort: {
+    input: z.object({ projectSort: projectSortSchema }).strict(),
+    output: z.object({ preferences: preferencesSchema }),
+  },
+  /**
+   * Manual ordering: place a project immediately before another, or last when
+   * `beforeProjectId` is null. Writes BB's own project order.
+   */
+  moveProject: {
+    input: z
+      .object({
+        projectId: z.string().min(1),
+        beforeProjectId: z.string().min(1).nullable(),
+      })
+      .strict(),
+    output: z.object({ projects: z.array(projectOrderEntrySchema) }),
   },
   /** Re-resolve now, ignoring the freshness and backoff rules. */
   refreshIcon: {

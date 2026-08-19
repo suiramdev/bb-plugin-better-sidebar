@@ -1,6 +1,9 @@
 /**
- * The frontend's view of the icon store: one rpc call per set of projects on
- * screen, refetched when the backend says a record changed.
+ * The frontend's view of this plugin's backend state: project icons, the
+ * feature toggles, the sort mode, and the project metadata BB's own sidebar
+ * payload does not carry (creation dates and manual positions).
+ *
+ * One rpc call, refetched when the backend says something changed.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -8,8 +11,14 @@ import {
   useRealtimeConnectionState,
   useRpc,
 } from "@get-bb/plugin-sdk/app";
-import type { FeatureFlags, PublicIcon, rpcContract } from "../contract";
+import type {
+  FeatureFlags,
+  ProjectOrderEntry,
+  PublicIcon,
+  rpcContract,
+} from "../contract";
 import { ICONS_CHANNEL } from "../channels";
+import { DEFAULT_PREFERENCES, type Preferences, type ProjectSort } from "../preferences";
 import { announceIconsChanged } from "./favicon-script";
 
 export const DEFAULT_FEATURES: FeatureFlags = {
@@ -19,17 +28,23 @@ export const DEFAULT_FEATURES: FeatureFlags = {
   showPullRequests: false,
 };
 
-export interface SidebarIconsState {
+export interface SidebarData {
   features: FeatureFlags;
+  preferences: Preferences;
+  /** Every project in BB's order, whether or not it has threads on screen. */
+  projects: readonly ProjectOrderEntry[];
   icons: Readonly<Record<string, PublicIcon>>;
   refresh: () => void;
+  setProjectSort: (projectSort: ProjectSort) => Promise<void>;
+  /** Places a project immediately before another, or last when null. */
+  moveProject: (projectId: string, beforeProjectId: string | null) => Promise<void>;
 }
 
-export function useSidebarIcons(
-  projectIds: readonly string[],
-): SidebarIconsState {
+export function useSidebarData(projectIds: readonly string[]): SidebarData {
   const rpc = useRpc<typeof rpcContract>();
   const [features, setFeatures] = useState<FeatureFlags>(DEFAULT_FEATURES);
+  const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
+  const [projects, setProjects] = useState<readonly ProjectOrderEntry[]>([]);
   const [icons, setIcons] = useState<Record<string, PublicIcon>>({});
   // A stable key: the same projects in a different array order must not refetch.
   const key = useMemo(
@@ -46,6 +61,8 @@ export function useSidebarIcons(
       .then((result) => {
         if (request !== latestRequest.current) return;
         setFeatures(result.features);
+        setPreferences(result.preferences);
+        setProjects(result.projects);
         setIcons(result.icons);
       })
       .catch(() => {
@@ -72,5 +89,36 @@ export function useSidebarIcons(
     hasConnected.current = true;
   }, [connectionState, load]);
 
-  return { features, icons, refresh: load };
+  const setProjectSort = useCallback(
+    async (projectSort: ProjectSort) => {
+      // Optimistic: reordering the list must feel like a click, not a request.
+      setPreferences({ projectSort });
+      try {
+        const result = await rpc.call("setProjectSort", { projectSort });
+        setPreferences(result.preferences);
+      } catch (error) {
+        load();
+        throw error;
+      }
+    },
+    [load, rpc],
+  );
+
+  const moveProject = useCallback(
+    async (projectId: string, beforeProjectId: string | null) => {
+      const result = await rpc.call("moveProject", { projectId, beforeProjectId });
+      setProjects(result.projects);
+    },
+    [rpc],
+  );
+
+  return {
+    features,
+    preferences,
+    projects,
+    icons,
+    refresh: load,
+    setProjectSort,
+    moveProject,
+  };
 }

@@ -20,12 +20,24 @@ const PROJECTS = [
     kind: "standard" as const,
     name: "bb",
     gitRemoteUrl: "git@github.com:get-bb/bb.git",
+    createdAt: 1_000,
+    updatedAt: 1_000,
+  },
+  {
+    id: "proj_2",
+    kind: "standard" as const,
+    name: "billing",
+    gitRemoteUrl: null,
+    createdAt: 2_000,
+    updatedAt: 2_000,
   },
   {
     id: "proj_personal",
     kind: "personal" as const,
     name: "Personal",
     gitRemoteUrl: null,
+    createdAt: 3_000,
+    updatedAt: 3_000,
   },
 ];
 
@@ -34,7 +46,10 @@ function host(settings: Record<string, unknown> = {}) {
     pluginId: "better-sidebar",
     settings,
     sdk: {
-      projects: { list: async () => PROJECTS },
+      projects: {
+        list: async () => PROJECTS,
+        reorder: async () => PROJECTS,
+      },
     },
   });
 }
@@ -58,9 +73,10 @@ test("overview lists every project, personal included, with its icon", async () 
   });
   expect(result.projects.map((project) => project.id)).toEqual([
     "proj_1",
+    "proj_2",
     "proj_personal",
   ]);
-  expect(result.projects[1]!.isPersonal).toBe(true);
+  expect(result.projects[2]!.isPersonal).toBe(true);
 });
 
 test("the sidebar call resolves missing icons in the background and signals clients", async () => {
@@ -168,4 +184,108 @@ test("dispose aborts in-flight icon work", async () => {
   // and the write that would have landed in a replaced registration set is
   // refused by the host rather than applied.
   await expect(inFlight).rejects.toThrow(/stale API handle/);
+});
+
+test("the sidebar payload carries bb's project order and the sort mode", async () => {
+  const { bb, harness } = host();
+  await plugin(bb);
+  const result = (await harness.behavior.callRpc("sidebar", {
+    projectIds: [],
+  })) as {
+    preferences: { projectSort: string };
+    projects: { id: string; position: number | null; createdAt: number }[];
+  };
+  expect(result.preferences).toEqual({ projectSort: "activity" });
+  // The personal project sits outside bb's order, so it carries no position.
+  expect(result.projects).toEqual([
+    { id: "proj_1", name: "bb", isPersonal: false, createdAt: 1_000, position: 0 },
+    { id: "proj_2", name: "billing", isPersonal: false, createdAt: 2_000, position: 1 },
+    {
+      id: "proj_personal",
+      name: "Personal",
+      isPersonal: true,
+      createdAt: 3_000,
+      position: null,
+    },
+  ]);
+});
+
+test("the sort mode is stored and survives a reload", async () => {
+  const { bb, harness } = host();
+  await plugin(bb);
+  await expect(
+    harness.behavior.callRpc("setProjectSort", { projectSort: "alphabetical" }),
+  ).resolves.toEqual({ preferences: { projectSort: "alphabetical" } });
+
+  // reload() hands back the next generation; the old handle is disposed.
+  const reloaded = await harness.lifecycle.reload(plugin);
+  const result = (await reloaded.harness.behavior.callRpc("sidebar", {
+    projectIds: [],
+  })) as { preferences: { projectSort: string } };
+  expect(result.preferences.projectSort).toBe("alphabetical");
+});
+
+test("an unknown sort mode is refused at the wire", async () => {
+  const { bb, harness } = host();
+  await plugin(bb);
+  await expect(
+    harness.behavior.callRpc("setProjectSort", { projectSort: "sideways" }),
+  ).rejects.toThrow();
+});
+
+test("moving a project writes bb's own project order", async () => {
+  const reorder = vi.fn(async () => PROJECTS);
+  const { bb, harness } = createFakePluginHost({
+    pluginId: "better-sidebar",
+    sdk: { projects: { list: async () => PROJECTS, reorder } },
+  });
+  await plugin(bb);
+  await harness.behavior.callRpc("moveProject", {
+    projectId: "proj_2",
+    beforeProjectId: "proj_1",
+  });
+  expect(reorder).toHaveBeenCalledWith({
+    projectId: "proj_2",
+    previousProjectId: null,
+    nextProjectId: "proj_1",
+  });
+});
+
+test("a move that changes nothing does not touch bb's order", async () => {
+  const reorder = vi.fn(async () => PROJECTS);
+  const { bb, harness } = createFakePluginHost({
+    pluginId: "better-sidebar",
+    sdk: { projects: { list: async () => PROJECTS, reorder } },
+  });
+  await plugin(bb);
+  await harness.behavior.callRpc("moveProject", {
+    projectId: "proj_1",
+    beforeProjectId: "proj_2",
+  });
+  expect(reorder).not.toHaveBeenCalled();
+});
+
+test("the personal project cannot be dragged into bb's order", async () => {
+  const reorder = vi.fn(async () => PROJECTS);
+  const { bb, harness } = createFakePluginHost({
+    pluginId: "better-sidebar",
+    sdk: { projects: { list: async () => PROJECTS, reorder } },
+  });
+  await plugin(bb);
+  await harness.behavior.callRpc("moveProject", {
+    projectId: "proj_personal",
+    beforeProjectId: "proj_1",
+  });
+  expect(reorder).not.toHaveBeenCalled();
+});
+
+test("the CLI shows and sets the project sort", async () => {
+  const { bb, harness } = host();
+  await plugin(bb);
+  expect((await harness.behavior.runCli(["sort"])).stdout).toContain("* activity");
+  await harness.behavior.runCli(["sort", "manual"]);
+  const result = (await harness.behavior.callRpc("sidebar", {
+    projectIds: [],
+  })) as { preferences: { projectSort: string } };
+  expect(result.preferences.projectSort).toBe("manual");
 });

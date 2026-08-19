@@ -1,6 +1,7 @@
 import { expect, test, vi } from "vitest";
 import { findProject, runCli, type CliDeps, type CliProject } from "./cli";
 import type { PublicIcon } from "./contract";
+import type { ProjectSort } from "./preferences";
 
 const PROJECTS: CliProject[] = [
   { id: "proj_1", name: "bb", gitRemoteUrl: "git@github.com:get-bb/bb.git" },
@@ -21,9 +22,16 @@ function icon(overrides: Partial<PublicIcon> = {}): PublicIcon {
   };
 }
 
+let storedSort: ProjectSort = "activity";
+
 function deps(overrides: Partial<CliDeps["icons"]> = {}): CliDeps {
   return {
     listProjects: async () => PROJECTS,
+    readPreferences: async () => ({ projectSort: storedSort }),
+    writeProjectSort: async (projectSort) => {
+      storedSort = projectSort;
+      return { projectSort };
+    },
     icons: {
       setIcon: vi.fn(async () => icon()),
       refresh: vi.fn(async () => icon()),
@@ -97,6 +105,29 @@ test("mode flags are mutually exclusive and required", async () => {
     exitCode: 1,
     stderr: expect.stringContaining("--url needs a value."),
   });
+});
+
+test("sort with no argument shows the modes and marks the active one", async () => {
+  storedSort = "alphabetical";
+  const result = await runCli(["sort"], deps());
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout).toContain("* alphabetical");
+  expect(result.stdout).toContain("  manual");
+});
+
+test("sort sets a mode and refuses an unknown one", async () => {
+  storedSort = "activity";
+  await expect(runCli(["sort", "manual"], deps())).resolves.toMatchObject({
+    exitCode: 0,
+    stdout: "Projects sort by Manual (drag to reorder).",
+  });
+  expect(storedSort).toBe("manual");
+
+  await expect(runCli(["sort", "sideways"], deps())).resolves.toMatchObject({
+    exitCode: 1,
+    stderr: expect.stringContaining("Unknown sort \"sideways\""),
+  });
+  expect(storedSort).toBe("manual");
 });
 
 test("an unknown command fails with usage", async () => {
