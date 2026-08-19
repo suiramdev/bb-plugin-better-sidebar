@@ -54,15 +54,18 @@ settings page:
 
 | Mode                       | Order                                                                       |
 | -------------------------- | --------------------------------------------------------------------------- |
-| Last activity _(default)_  | Most recent attention first, and the project you are in leads.               |
+| Last activity _(default)_  | The project whose thread most recently stopped and asked for you, first.    |
 | Manual                     | Your own order — drag a project header, or use its right-click menu.         |
 | Alphabetical               | By name, case-insensitive.                                                   |
 | Newest project first        | By project creation date, newest first.                                      |
 | Oldest project first        | By project creation date, oldest first.                                     |
 
-Only "Last activity" floats the project you are viewing to the top: in an order
-you chose, a group jumping around because of the route would be the sidebar
-disobeying you.
+**Opening something is not activity.** "Last activity" means the last time a
+thread *stopped and notified you* — a turn that ended, a question waiting, a run
+that failed. Opening a project, reading a thread, or a background write leaves
+the order alone, so browsing never reshuffles the list under your cursor, and no
+mode reacts to the route you are on. The project you are viewing still always
+shows its header, even with no threads of its own — it just keeps its place.
 
 **Manual order is BB's own project order.** Dragging a project here calls BB's
 `projects.reorder`, so BB's built-in sidebar shows the same order and there is
@@ -70,8 +73,8 @@ no second, drifting copy of it. Reordering never depends on drag alone — every
 project header's right-click menu has **Move project up / down** — and the
 personal project stays put, because BB keeps it outside that order.
 
-Threads inside a group always read newest-attention-first, with pinned threads
-above; only the project order is configurable.
+Threads inside a group read by that same signal, newest first, with pinned
+threads above; only the project order is configurable.
 
 ## Settings
 

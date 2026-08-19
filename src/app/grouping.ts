@@ -55,14 +55,14 @@ function matchesQuery(thread: PluginSidebarThread, query: string): boolean {
 }
 
 /**
- * Newest attention first, the way bb's own sidebar reads at rest. Attention
- * leads and `updatedAt` only breaks ties, so a background write on an old
- * thread does not jump it over one the user just looked at.
+ * Newest attention first. Attention is the only signal: it moves when a thread
+ * stopped and asked for the user — a turn that ended, a question, a failure —
+ * and not when the thread is merely opened, read, or written to in the
+ * background. Creation breaks ties so the order is total.
  */
 function byRecency(left: ThreadNode, right: ThreadNode): number {
   return (
     right.thread.latestAttentionAt - left.thread.latestAttentionAt ||
-    right.thread.updatedAt - left.thread.updatedAt ||
     right.thread.createdAt - left.thread.createdAt
   );
 }
@@ -181,13 +181,17 @@ export function buildGroups({
 
   return sortGroups([...groups.values()], {
     sort,
-    activeProjectId,
     createdAtById: new Map(
       projectOrder.map((entry) => [entry.id, entry.createdAt]),
     ),
   });
 }
 
+/**
+ * A group is as recent as the last time one of its threads asked for the user.
+ * Opening a project, reading a thread, or a background write are not activity:
+ * they leave `latestAttentionAt` alone, so browsing never reshuffles the list.
+ */
 function groupRecency(group: ProjectGroup): number {
   return [...group.pinned, ...group.roots].reduce(
     (latest, node) => Math.max(latest, node.thread.latestAttentionAt),
@@ -196,9 +200,10 @@ function groupRecency(group: ProjectGroup): number {
 }
 
 /**
- * Orders the project groups. Only "activity" floats the project in view to the
- * top: in an order the user chose — manual, alphabetical, or by creation — a
- * group jumping because of the route would be the sidebar disobeying them.
+ * Orders the project groups. No mode reacts to the route: the project you are
+ * looking at holds its place, because opening something is not activity and an
+ * order the user chose — manual, alphabetical, or by creation — must not move
+ * under them either.
  *
  * Ties and unknown metadata fall back to the project name, so the list has a
  * stable order even while the backend read is still in flight.
@@ -207,11 +212,9 @@ export function sortGroups(
   groups: readonly ProjectGroup[],
   {
     sort,
-    activeProjectId,
     createdAtById,
   }: {
     sort: ProjectSort;
-    activeProjectId: string | null;
     createdAtById: ReadonlyMap<string, number>;
   },
 ): ProjectGroup[] {
@@ -243,11 +246,8 @@ export function sortGroups(
           ? rightCreated - leftCreated
           : leftCreated - rightCreated;
       }
-      default: {
-        if (left.projectId === activeProjectId) return -1;
-        if (right.projectId === activeProjectId) return 1;
+      default:
         return groupRecency(right) - groupRecency(left);
-      }
     }
   };
 

@@ -30,13 +30,30 @@ test("threads group by project, most recently active group first", () => {
   expect(groups[1]!.projectName).toBe("bb");
 });
 
-test("the project in view leads, even with no threads of its own", () => {
+test("the project in view is shown even with no threads, but does not jump the queue", () => {
   const groups = build(
     [makeThread({ id: "a", projectId: "proj_1", latestAttentionAt: 99 })],
     { activeProjectId: "proj_2" },
   );
+  // Opening a project is not activity, so proj_2 stays where its silence puts
+  // it — present for its header and icon, last for its lack of attention.
+  expect(groups.map((group) => group.projectId)).toEqual(["proj_1", "proj_2"]);
+  expect(groups[1]!.threadCount).toBe(0);
+});
+
+test("reading or writing a thread in the background never reorders a group", () => {
+  const groups = build([
+    makeThread({
+      id: "noisy",
+      projectId: "proj_1",
+      latestAttentionAt: 10,
+      // A read receipt and a background write, long after the agent stopped.
+      lastReadAt: 900,
+      updatedAt: 900,
+    }),
+    makeThread({ id: "stopped", projectId: "proj_2", latestAttentionAt: 50 }),
+  ]);
   expect(groups.map((group) => group.projectId)).toEqual(["proj_2", "proj_1"]);
-  expect(groups[0]!.threadCount).toBe(0);
 });
 
 test("pinned threads sit in their own bucket, still by recency", () => {
@@ -175,12 +192,12 @@ function order(sort: Parameters<typeof buildGroups>[0]["sort"], activeProjectId 
   }).map((group) => group.projectId);
 }
 
-test("activity sorts by the most recent attention, with the project in view first", () => {
+test("activity sorts by the most recent attention, and ignores the route", () => {
   expect(order("activity")).toEqual(["proj_2", "proj_personal", "proj_1"]);
   expect(order("activity", "proj_1" as never)).toEqual([
-    "proj_1",
     "proj_2",
     "proj_personal",
+    "proj_1",
   ]);
 });
 
