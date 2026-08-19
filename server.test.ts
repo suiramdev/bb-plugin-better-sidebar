@@ -1,5 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
+import type { PluginSettingValue } from "@get-bb/plugin-sdk";
 import plugin from "./server";
 
 const PIXEL_DATA_URL = "data:image/png;base64,AQIDBA==";
@@ -41,7 +42,7 @@ const PROJECTS = [
   },
 ];
 
-function host(settings: Record<string, unknown> = {}) {
+function host(settings: Record<string, PluginSettingValue> = {}) {
   return createFakePluginHost({
     pluginId: "better-sidebar",
     settings,
@@ -73,6 +74,7 @@ test("overview lists every project, personal included, with its icon", async () 
     tabFavicon: true,
     showBranch: true,
     showPullRequests: false,
+    stackedThreads: false,
   });
   expect(result.projects.map((project) => project.id)).toEqual([
     "proj_1",

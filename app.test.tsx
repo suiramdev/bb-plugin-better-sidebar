@@ -11,6 +11,7 @@ const FEATURES = {
   tabFavicon: true,
   showBranch: true,
   showPullRequests: false,
+  stackedThreads: false,
 };
 
 const PROJECT_ORDER = [
@@ -32,9 +33,9 @@ function sidebarRpc(overrides: Record<string, unknown> = {}) {
       projects: PROJECT_ORDER,
       icons: { proj_1: icon(), proj_2: icon({ dataUrl: null, mode: "none" }) },
     }),
-    setProjectSort: (input: { projectSort: string }) => ({
-      preferences: input,
-    }),
+    // The harness types every handler as `(input: unknown) => unknown`; this
+    // one just echoes what it was sent back as the saved preferences.
+    setProjectSort: (input: unknown) => ({ preferences: input }),
     moveProject: () => ({ projects: PROJECT_ORDER }),
     deleteProject: () => ({ projects: PROJECT_ORDER.slice(0, 1) }),
     ...overrides,
@@ -158,6 +159,9 @@ async function mountList(
       isCompactViewport: false,
       onNavigate: () => {},
       searchQuery: "",
+      // This sidebar replaces BB's list outright and never delegates back to
+      // it, so the prop only has to satisfy the contract.
+      experimental_Original: () => null,
       ...props,
     },
     { rpc: sidebarRpc(), sidebarThreads: SIDEBAR_THREADS, ...options },
@@ -612,3 +616,142 @@ function deleteCalls(slot: {
     .filter((call) => call.method === "deleteProject")
     .map((call) => call.input);
 }
+
+/**
+ * Stacked threads: three threads whose branches are cut from one another, which
+ * only `baseBranch` reveals. `thr_b` is deliberately parented to nothing and
+ * `thr_c` is parented to `thr_a`, so a pass that keyed off `parentThreadId`
+ * could not produce this order.
+ */
+const STACK_THREADS = {
+  threads: [
+    makeThread({
+      id: "thr_a",
+      title: "Add auth endpoints",
+      projectId: "proj_1",
+      createdAt: 1,
+      latestAttentionAt: 50,
+      environment: {
+        id: "env_a",
+        name: null,
+        branchName: "feat/auth",
+        workspaceDisplayKind: "managed-worktree",
+      },
+    }),
+    makeThread({
+      id: "thr_b",
+      title: "Hash passwords",
+      projectId: "proj_1",
+      createdAt: 2,
+      environment: {
+        id: "env_b",
+        name: null,
+        branchName: "feat/hash",
+        workspaceDisplayKind: "managed-worktree",
+      },
+    }),
+    makeThread({
+      id: "thr_c",
+      title: "Add refresh tokens",
+      projectId: "proj_1",
+      createdAt: 3,
+      parentThreadId: "thr_a",
+      environment: {
+        id: "env_c",
+        name: null,
+        branchName: "feat/refresh",
+        workspaceDisplayKind: "managed-worktree",
+      },
+    }),
+  ],
+  projects: [makeProject({ id: "proj_1", name: "bb" })],
+};
+
+const STACK_BRANCHES = {
+  env_a: {
+    branchName: "feat/auth",
+    baseBranch: "main",
+    defaultBranch: "main",
+  },
+  env_b: {
+    branchName: "feat/hash",
+    baseBranch: "feat/auth",
+    defaultBranch: "main",
+  },
+  env_c: {
+    branchName: "feat/refresh",
+    baseBranch: "feat/hash",
+    defaultBranch: "main",
+  },
+};
+
+test("stacked threads stay off until the feature is on, and cost no lookup", async () => {
+  const slot = await mountList(
+    {},
+    { sidebarThreads: STACK_THREADS, rpc: sidebarRpc() },
+  );
+  await slot.findByLabelText("Add auth endpoints");
+
+  // Nothing is numbered, and the host was never asked about an environment.
+  expect(slot.queryByLabelText(/in stack/)).toBeNull();
+  expect(
+    slot.inspection.rpcCalls.filter((call) => call.method === "stacks"),
+  ).toEqual([]);
+});
+
+test("a stack reads as an ordered list nested one layer under its parent", async () => {
+  const slot = await mountList(
+    {},
+    {
+      sidebarThreads: STACK_THREADS,
+      rpc: sidebarRpc({
+        sidebar: () => ({
+          features: { ...FEATURES, stackedThreads: true },
+          preferences: { projectSort: "activity" },
+          projects: PROJECT_ORDER,
+          icons: {},
+        }),
+        stacks: () => ({ branches: STACK_BRANCHES }),
+      }),
+    },
+  );
+
+  // The bottom of the stack keeps a plain label; the rest are numbered in
+  // based-on order, whatever their parentThreadId says.
+  await slot.findByLabelText("Add auth endpoints");
+  await slot.findByLabelText("Hash passwords, 2nd in stack");
+  await slot.findByLabelText("Add refresh tokens, 3rd in stack");
+
+  // One layer deep: every stacked row shares the first indent step.
+  const rows = ["Hash passwords, 2nd in stack", "Add refresh tokens, 3rd in stack"];
+  const indents = rows.map((label) => {
+    const row = slot.getByLabelText(label).closest("div[style]");
+    return (row as HTMLElement).style.marginLeft;
+  });
+  expect(new Set(indents)).toEqual(new Set(["14px"]));
+});
+
+test("only the environments on screen are asked about, once each", async () => {
+  const slot = await mountList(
+    {},
+    {
+      sidebarThreads: STACK_THREADS,
+      rpc: sidebarRpc({
+        sidebar: () => ({
+          features: { ...FEATURES, stackedThreads: true },
+          preferences: { projectSort: "activity" },
+          projects: PROJECT_ORDER,
+          icons: {},
+        }),
+        stacks: () => ({ branches: STACK_BRANCHES }),
+      }),
+    },
+  );
+  await slot.findByLabelText("Hash passwords, 2nd in stack");
+
+  expect(
+    slot.inspection.rpcCalls
+      .filter((call) => call.method === "stacks")
+      .map((call) => call.input),
+  ).toEqual([{ environmentIds: ["env_a", "env_b", "env_c"] }]);
+});

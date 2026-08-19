@@ -26,7 +26,8 @@ import { SortMenu } from "./SortMenu";
 import { AddProjectButton } from "./AddProjectButton";
 import { ThreadRow } from "./ThreadRow";
 import { stepMoveTarget } from "./manual-move";
-import { useSidebarData } from "./useSidebarData";
+import { useSidebarData, useStackBranches } from "./useSidebarData";
+import { applyStacks, environmentIdsFor } from "./stacking";
 
 const COLLAPSED_STORAGE_KEY = "better-sidebar.collapsed-projects";
 
@@ -102,7 +103,7 @@ export function ThreadList({
     });
   }, []);
 
-  const groups = useMemo(
+  const baseGroups = useMemo(
     () =>
       buildGroups({
         threads,
@@ -120,6 +121,21 @@ export function ThreadList({
       searchQuery,
       activeProjectId,
     ],
+  );
+
+  // Empty while the feature is off, which is what stops the hook from asking
+  // the host about a single environment.
+  const environmentIds = useMemo(
+    () => (features.stackedThreads ? environmentIdsFor(baseGroups) : []),
+    [features.stackedThreads, baseGroups],
+  );
+  const stackBranches = useStackBranches(environmentIds);
+  const groups = useMemo(
+    () =>
+      features.stackedThreads
+        ? applyStacks(baseGroups, stackBranches)
+        : baseGroups,
+    [features.stackedThreads, baseGroups, stackBranches],
   );
 
   // BB's order, personal project excluded: what a manual move can address.

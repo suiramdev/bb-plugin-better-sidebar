@@ -24,13 +24,53 @@ import {
   type ProjectSort,
 } from "../preferences";
 import { announceIconsChanged } from "./favicon-script";
+import type { BranchByEnvironmentId } from "./stacking";
 
 export const DEFAULT_FEATURES: FeatureFlags = {
   projectIcons: true,
   tabFavicon: true,
   showBranch: true,
   showPullRequests: false,
+  stackedThreads: false,
 };
+
+/**
+ * The branch facts behind stacked threads, fetched only while the feature is
+ * on. Pass an empty list to fetch nothing: each id costs an environment read on
+ * the host, so a sidebar with the feature off must not ask at all.
+ *
+ * A failed read resolves to no stacks rather than an error — the list still
+ * renders, just flat.
+ */
+export function useStackBranches(
+  environmentIds: readonly string[],
+): BranchByEnvironmentId {
+  const rpc = useRpc<typeof rpcContract>();
+  const [branches, setBranches] = useState<BranchByEnvironmentId>({});
+  // `environmentIdsFor` already sorted and deduplicated these, so the joined
+  // key changes only when the set does.
+  const key = environmentIds.join(",");
+  const latestRequest = useRef(0);
+
+  useEffect(() => {
+    if (key === "") {
+      setBranches({});
+      return;
+    }
+    const request = ++latestRequest.current;
+    void rpc
+      .call("stacks", { environmentIds: key.split(",") })
+      .then((result) => {
+        if (request !== latestRequest.current) return;
+        setBranches(result.branches);
+      })
+      .catch(() => {
+        // Leave the last good stacks on screen; the next change tries again.
+      });
+  }, [key, rpc]);
+
+  return branches;
+}
 
 export interface SidebarData {
   features: FeatureFlags;

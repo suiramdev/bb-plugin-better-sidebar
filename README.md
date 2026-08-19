@@ -76,6 +76,32 @@ personal project stays put, because BB keeps it outside that order.
 Threads inside a group read by that same signal, newest first, with pinned
 threads above; only the project order is configurable.
 
+## Stacked threads
+
+Off by default. When on, threads whose branches are cut from one another are
+drawn the way a stacked pull request reads: the bottom of the stack keeps its
+plain row, and everything built on top of it is numbered `2`, `3`, `4` and
+nested one layer under it.
+
+```text
+▸ Add auth endpoints          ← the branch cut from main
+    2  Hash passwords         ← based on feat/auth
+    3  Add refresh tokens     ← based on feat/hash
+    4  Rate-limit login       ← the second branch off feat/auth
+```
+
+**The signal is the branch, not the thread.** BB's thread parenting is
+orchestration — a parent coordinates a child and gets its lifecycle events —
+and it is chosen independently of `--base-branch`. Two threads can even share
+one worktree, in which case neither is based on the other. So a stack is read
+from the environment's base branch alone, and a branch cut from the default
+branch starts a stack rather than joining one.
+
+**A stack is always one layer deep.** A chain five branches long still reads as
+one parent and four numbered rows, and a stack that forks flattens depth-first,
+so the numbers follow the based-on chain. Threads sharing a branch share its
+number. Threads that are not in a stack keep the nesting they always had.
+
 ## Settings
 
 Each visual feature is a toggle on the plugin's settings page:
@@ -85,6 +111,8 @@ Each visual feature is a toggle on the plugin's settings page:
 - **Show each thread's branch or machine** — the trailing label on a row.
 - **Show pull request status on threads** — off by default, because each row
   costs a git-host lookup.
+- **Group threads whose branches are based on one another as a stack** — off by
+  default, because each environment on screen costs a lookup. See below.
 
 Settings apply live; there is no reload to run.
 

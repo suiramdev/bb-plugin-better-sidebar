@@ -48,6 +48,12 @@ export default async function plugin(bb: BbPluginApi) {
       label: "Show pull request status on threads (extra git host lookups)",
       default: false,
     },
+    stackedThreads: {
+      type: "boolean",
+      label:
+        "Group threads whose branches are based on one another as a stack (extra environment lookups)",
+      default: false,
+    },
   });
 
   const features = async (): Promise<FeatureFlags> => {
@@ -59,6 +65,7 @@ export default async function plugin(bb: BbPluginApi) {
       tabFavicon: values.tabFavicon,
       showBranch: values.showBranch,
       showPullRequests: values.showPullRequests,
+      stackedThreads: values.stackedThreads,
     };
   };
 
@@ -135,6 +142,36 @@ export default async function plugin(bb: BbPluginApi) {
       projects: await projectOrder(),
       icons: await icons.iconsFor(projectIds),
     }),
+    stacks: async ({ environmentIds }) => {
+      // One lookup per environment, in parallel. A single unreadable
+      // environment must not cost the whole sidebar its stacks, so a rejection
+      // just leaves that entry out and its thread renders unstacked.
+      const entries = await Promise.all(
+        environmentIds.map(async (environmentId) => {
+          try {
+            const environment = await bb.sdk.environments.get({
+              environmentId,
+              signal: lifetime.signal,
+            });
+            return [
+              environmentId,
+              {
+                branchName: environment.branchName,
+                baseBranch: environment.baseBranch,
+                defaultBranch: environment.defaultBranch,
+              },
+            ] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      return {
+        branches: Object.fromEntries(
+          entries.filter((entry) => entry !== null),
+        ),
+      };
+    },
     favicon: async ({ projectId }) => {
       const { tabFavicon } = await features();
       if (!tabFavicon) return { enabled: false, dataUrl: null };

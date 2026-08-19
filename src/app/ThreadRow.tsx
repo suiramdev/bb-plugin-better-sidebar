@@ -13,6 +13,21 @@ import { StatusGlyph } from "./StatusGlyph";
 /** Indent per nesting level, matched to the 16px icon column above it. */
 const INDENT_PX = 14;
 
+/** "2nd", "3rd" — for the screen-reader label, where "2" alone says nothing. */
+const ORDINAL_SUFFIXES: Record<Intl.LDMLPluralRule, string> = {
+  one: "st",
+  two: "nd",
+  few: "rd",
+  other: "th",
+  zero: "th",
+  many: "th",
+};
+const ORDINAL_RULES = new Intl.PluralRules("en", { type: "ordinal" });
+
+function ordinal(position: number): string {
+  return `${position}${ORDINAL_SUFFIXES[ORDINAL_RULES.select(position)]}`;
+}
+
 /**
  * One thread as a single line. `children` is the nested list of its child
  * threads, rendered inside this row's own `<li>` so the markup stays a valid
@@ -63,7 +78,13 @@ export function ThreadRow({
             data-sidebar-thread-shortcut-target=""
             data-sidebar-thread-id={node.thread.id}
             href="#"
-            aria-label={title}
+            // The badge is decorative, so the position is spoken here instead:
+            // a bare "2" before a title would read as part of it.
+            aria-label={
+              node.stackPosition === null
+                ? title
+                : `${title}, ${ordinal(node.stackPosition)} in stack`
+            }
             aria-current={isActive ? "page" : undefined}
             {...splitProps}
             onClick={(event) => {
@@ -76,6 +97,17 @@ export function ThreadRow({
             className="absolute inset-0 cursor-pointer rounded-md"
           />
           <div className="pointer-events-none relative flex items-center gap-1.5 px-2 py-1">
+            {node.stackPosition !== null ? (
+              // The stack's own order, not a count of anything: a plain
+              // number reads as the position it is, the way a stacked PR
+              // is referred to by where it sits in the stack.
+              <span
+                aria-hidden
+                className="w-3 shrink-0 text-right text-2xs tabular-nums text-muted-foreground/70"
+              >
+                {node.stackPosition}
+              </span>
+            ) : null}
             {node.thread.originKind === "fork" ? (
               <Icon name="Fork" className="size-3 shrink-0 text-muted-foreground/60" />
             ) : null}

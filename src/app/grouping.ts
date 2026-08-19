@@ -17,6 +17,14 @@ export interface ThreadNode {
   children: ThreadNode[];
   /** Kept only to hold a matching descendant during a search. */
   isSearchAncestor: boolean;
+  /**
+   * Place in a stack of branches based on one another, counting the bottom as
+   * 1. Null when the thread is not in a stack, or is the bottom of one — the
+   * bottom is a plain row, so only the branches above it carry a number.
+   *
+   * Always null unless the stacked-threads feature is on.
+   */
+  stackPosition: number | null;
 }
 
 export interface ProjectGroup {
@@ -136,6 +144,7 @@ export function buildGroups({
       thread,
       children: [],
       isSearchAncestor: !matched.has(thread.id),
+      stackPosition: null,
     });
   }
 
