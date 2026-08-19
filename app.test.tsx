@@ -185,3 +185,52 @@ test("a project the sidebar shows is what the icons call asks for", async () => 
     }),
   );
 });
+
+test("the settings section lists projects and opens the icon editor", async () => {
+  const app = await loadPluginApp(() => import("./app"));
+  const slot = renderSlot(
+    app.settingsSections[0]!,
+    {},
+    {
+      rpc: {
+        overview: () => ({
+          features: FEATURES,
+          projects: [
+            {
+              id: "proj_1",
+              name: "bb",
+              isPersonal: false,
+              gitRemoteUrl: "git@github.com:get-bb/bb.git",
+              icon: icon(),
+            },
+            {
+              id: "proj_2",
+              name: "billing",
+              isPersonal: false,
+              gitRemoteUrl: null,
+              icon: icon({ dataUrl: null, origin: null }),
+            },
+          ],
+        }),
+        setIcon: () => ({ icon: icon({ mode: "none", dataUrl: null }) }),
+      },
+    },
+  );
+  mounted.push(slot);
+
+  expect(await slot.findByText("bb")).toBeTruthy();
+  expect(slot.getByText("No git remote")).toBeTruthy();
+
+  slot.getAllByRole("button", { name: "Change" })[0]!.click();
+  expect(await slot.findByRole("radio", { name: "From the repository" })).toBeTruthy();
+
+  // "No icon" needs nothing more from the user, so it applies immediately.
+  slot.getByRole("radio", { name: "No icon" }).click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(slot.inspection.rpcCalls).toContainEqual(
+    expect.objectContaining({
+      method: "setIcon",
+      input: { projectId: "proj_1", mode: "none" },
+    }),
+  );
+});
