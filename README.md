@@ -61,7 +61,7 @@ settings page:
 | Oldest project first        | By project creation date, oldest first.                                     |
 
 **Opening something is not activity.** "Last activity" means the last time a
-thread *stopped and notified you* — a turn that ended, a question waiting, a run
+thread _stopped and notified you_ — a turn that ended, a question waiting, a run
 that failed. Opening a project, reading a thread, or a background write leaves
 the order alone, so browsing never reshuffles the list under your cursor, and no
 mode reacts to the route you are on. The project you are viewing still always

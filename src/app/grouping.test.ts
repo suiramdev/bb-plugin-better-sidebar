@@ -100,7 +100,11 @@ test("a search keeps a matching child and its parent as context", () => {
   const groups = build(
     [
       makeThread({ id: "parent", title: "Unrelated" }),
-      makeThread({ id: "child", title: "Fix the flaky test", parentThreadId: "parent" }),
+      makeThread({
+        id: "child",
+        title: "Fix the flaky test",
+        parentThreadId: "parent",
+      }),
       makeThread({ id: "other", title: "Nothing to see" }),
     ],
     { searchQuery: "flaky" },
@@ -125,7 +129,11 @@ test("a search also matches a branch name or machine", () => {
         workspaceDisplayKind: "managed-worktree",
       },
     }),
-    makeThread({ id: "on-mac", title: "Nameless too", host: { id: "h", name: "studio" } }),
+    makeThread({
+      id: "on-mac",
+      title: "Nameless too",
+      host: { id: "h", name: "studio" },
+    }),
   ];
   expect(build(threads, { searchQuery: "passkeys" })[0]!.threadCount).toBe(1);
   expect(build(threads, { searchQuery: "studio" })[0]!.threadCount).toBe(1);
@@ -135,7 +143,9 @@ test("a search also matches a branch name or machine", () => {
 test("titles fall back, then read as untitled", () => {
   expect(threadTitle(makeThread({ id: "a", title: "Real" }))).toBe("Real");
   expect(
-    threadTitle(makeThread({ id: "a", title: null, titleFallback: "First line" })),
+    threadTitle(
+      makeThread({ id: "a", title: null, titleFallback: "First line" }),
+    ),
   ).toBe("First line");
   expect(
     threadTitle(makeThread({ id: "a", title: "  ", titleFallback: null })),
@@ -157,15 +167,21 @@ test("the subtitle prefers a branch and falls back to the machine", () => {
       }),
     ),
   ).toBe("main");
-  expect(threadSubtitle(makeThread({ id: "a", host: { id: "h", name: "studio" } }))).toBe(
-    "studio",
-  );
+  expect(
+    threadSubtitle(makeThread({ id: "a", host: { id: "h", name: "studio" } })),
+  ).toBe("studio");
   expect(threadSubtitle(makeThread({ id: "a" }))).toBeNull();
 });
 
 const ORDER = [
   { id: "proj_1", name: "bb", isPersonal: false, createdAt: 300, position: 2 },
-  { id: "proj_2", name: "billing", isPersonal: false, createdAt: 100, position: 0 },
+  {
+    id: "proj_2",
+    name: "billing",
+    isPersonal: false,
+    createdAt: 100,
+    position: 0,
+  },
   {
     id: "proj_personal",
     name: "Personal",
@@ -181,7 +197,10 @@ const SPREAD = [
   makeThread({ id: "c", projectId: "proj_personal", latestAttentionAt: 50 }),
 ];
 
-function order(sort: Parameters<typeof buildGroups>[0]["sort"], activeProjectId = null) {
+function order(
+  sort: Parameters<typeof buildGroups>[0]["sort"],
+  activeProjectId = null,
+) {
   return buildGroups({
     threads: SPREAD,
     projects: PROJECTS,

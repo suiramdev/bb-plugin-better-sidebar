@@ -73,7 +73,10 @@ function byCreation(left: ThreadNode, right: ThreadNode): number {
 }
 
 function countNodes(nodes: readonly ThreadNode[]): number {
-  return nodes.reduce((total, node) => total + 1 + countNodes(node.children), 0);
+  return nodes.reduce(
+    (total, node) => total + 1 + countNodes(node.children),
+    0,
+  );
 }
 
 export interface BuildGroupsArgs {
@@ -110,7 +113,9 @@ export function buildGroups({
   const visible = threads.filter((thread) => !thread.isArchived);
   const byId = new Map(visible.map((thread) => [thread.id, thread]));
   const matched = new Set(
-    visible.filter((thread) => matchesQuery(thread, searchQuery)).map((t) => t.id),
+    visible
+      .filter((thread) => matchesQuery(thread, searchQuery))
+      .map((t) => t.id),
   );
 
   // A matching thread pulls its ancestors in, marked so a row can render them
@@ -161,7 +166,10 @@ export function buildGroups({
   for (const node of nodes.values()) {
     const parentId = node.thread.parentThreadId;
     const parent = parentId === null ? undefined : nodes.get(parentId);
-    if (parent !== undefined && parent.thread.projectId === node.thread.projectId) {
+    if (
+      parent !== undefined &&
+      parent.thread.projectId === node.thread.projectId
+    ) {
       parent.children.push(node);
       continue;
     }
@@ -230,7 +238,9 @@ export function sortGroups(
       case "manual":
         // The personal project has no place in BB's order, so it sits last.
         if (left.position === null || right.position === null) {
-          return (left.position === null ? 1 : 0) - (right.position === null ? 1 : 0);
+          return (
+            (left.position === null ? 1 : 0) - (right.position === null ? 1 : 0)
+          );
         }
         return left.position - right.position;
       case "alphabetical":
@@ -240,7 +250,9 @@ export function sortGroups(
         const leftCreated = created(left);
         const rightCreated = created(right);
         if (leftCreated === null || rightCreated === null) {
-          return (leftCreated === null ? 1 : 0) - (rightCreated === null ? 1 : 0);
+          return (
+            (leftCreated === null ? 1 : 0) - (rightCreated === null ? 1 : 0)
+          );
         }
         return sort === "newest"
           ? rightCreated - leftCreated
@@ -251,5 +263,7 @@ export function sortGroups(
     }
   };
 
-  return [...groups].sort((left, right) => compare(left, right) || byName(left, right));
+  return [...groups].sort(
+    (left, right) => compare(left, right) || byName(left, right),
+  );
 }
