@@ -8,6 +8,7 @@ import * as ContextMenu from "@radix-ui/react-context-menu";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
+import { LIST_HOVER_TRANSITION } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 
 export interface ProjectMenuAction {
@@ -81,7 +82,11 @@ const CONTENT_CLASS =
   "z-50 min-w-44 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md";
 
 const ITEM_CLASS = [
-  "cursor-pointer rounded-md px-2 py-1.5 text-sm outline-none",
+  "flex cursor-pointer items-center rounded-md px-2 py-1.5 text-sm outline-none",
+  // The pointer is already on the item; a fade would only lag behind it.
+  LIST_HOVER_TRANSITION,
+  // A menu item is a control, and a coarse pointer needs a bigger one.
+  "min-h-6 max-md:pointer-coarse:min-h-9",
   "data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",
 ].join(" ");
 
@@ -144,10 +149,17 @@ export function ProjectActionsButton({
         // Stops the header's collapse toggle from firing underneath it.
         onClick={(event) => event.stopPropagation()}
         className={cn(
-          "flex size-5 shrink-0 items-center justify-center rounded-md outline-none",
-          "text-muted-foreground/40 opacity-70 transition-colors",
-          "hover:bg-sidebar-accent hover:text-muted-foreground",
-          "focus-visible:ring-1 focus-visible:ring-border",
+          // 20px was under the 24px minimum target, and this button is the
+          // only way to reach these actions without a right-click.
+          "flex size-6 shrink-0 items-center justify-center rounded-md outline-none",
+          "max-md:pointer-coarse:size-9",
+          // Muted, not muted-and-then-faded twice: `text-muted-foreground/40`
+          // under `opacity-70` left the glyph at roughly a quarter of the
+          // palette's quietest token, which is not a legible control.
+          "text-muted-foreground opacity-60",
+          LIST_HOVER_TRANSITION,
+          "hover:bg-sidebar-accent hover:text-foreground",
+          "focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-ring",
           "group-hover/header:opacity-100 data-[state=open]:bg-sidebar-accent data-[state=open]:opacity-100",
         )}
       >

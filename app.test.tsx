@@ -470,9 +470,11 @@ test("a project with no threads is still listed, dimmed and below the rest", asy
   ).toBeTruthy();
 
   // Dimmed, and dimmed only here: the projects with threads stay at full
-  // strength.
-  expect(quiet.querySelector(".opacity-55")).toBeTruthy();
-  expect(slot.getByLabelText("bb").querySelector(".opacity-55")).toBeNull();
+  // strength. The dimming lands on the project's icon, not on the header —
+  // applied to the header it also faded the name and count, which are already
+  // drawn in the palette's quietest text token.
+  expect(quiet.querySelector(".opacity-50")).toBeTruthy();
+  expect(slot.getByLabelText("bb").querySelector(".opacity-50")).toBeNull();
 });
 
 test("the quiet group collapses, and stays collapsed on the next mount", async () => {
@@ -723,7 +725,10 @@ test("a stack reads as an ordered list nested one layer under its parent", async
   await slot.findByLabelText("Add refresh tokens, 3rd in stack");
 
   // One layer deep: every stacked row shares the first indent step.
-  const rows = ["Hash passwords, 2nd in stack", "Add refresh tokens, 3rd in stack"];
+  const rows = [
+    "Hash passwords, 2nd in stack",
+    "Add refresh tokens, 3rd in stack",
+  ];
   const indents = rows.map((label) => {
     const row = slot.getByLabelText(label).closest("div[style]");
     return (row as HTMLElement).style.marginLeft;

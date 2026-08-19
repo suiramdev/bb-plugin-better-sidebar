@@ -4,6 +4,7 @@ import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
   type PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
+import { LIST_HOVER_TRANSITION } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,15 +32,24 @@ export function RowContextMenu({
             Open in split
           </MenuItem>
           <ContextMenu.Separator className="my-1 h-px bg-border" />
-          <MenuItem onSelect={() => void actions.setRead(thread.id, thread.isUnread)}>
+          <MenuItem
+            onSelect={() => void actions.setRead(thread.id, thread.isUnread)}
+          >
             {thread.isUnread ? "Mark read" : "Mark unread"}
           </MenuItem>
-          <MenuItem onSelect={() => void actions.setPinned(thread.id, !thread.isPinned)}>
+          <MenuItem
+            onSelect={() => void actions.setPinned(thread.id, !thread.isPinned)}
+          >
             {thread.isPinned ? "Unpin" : "Pin"}
           </MenuItem>
           <ContextMenu.Separator className="my-1 h-px bg-border" />
-          <MenuItem onSelect={() => actions.archive(thread.id)}>Archive</MenuItem>
-          <MenuItem destructive onSelect={() => actions.requestDelete(thread.id)}>
+          <MenuItem onSelect={() => actions.archive(thread.id)}>
+            Archive
+          </MenuItem>
+          <MenuItem
+            destructive
+            onSelect={() => actions.requestDelete(thread.id)}
+          >
             Delete
           </MenuItem>
         </ContextMenu.Content>
@@ -61,7 +71,11 @@ export function MenuItem({
     <ContextMenu.Item
       onSelect={onSelect}
       className={cn(
-        "cursor-pointer rounded-md px-2 py-1.5 text-sm outline-none",
+        "flex cursor-pointer items-center rounded-md px-2 py-1.5 text-sm outline-none",
+        // A menu item is a control, and a coarse pointer needs a bigger one.
+        "min-h-6 max-md:pointer-coarse:min-h-9",
+        // The pointer is already on the item; a fade would only lag behind it.
+        LIST_HOVER_TRANSITION,
         "data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",
         destructive && "text-destructive",
       )}

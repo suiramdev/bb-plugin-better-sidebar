@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { LIST_HOVER_TRANSITION } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { buildGroups, type ProjectGroup, type ThreadNode } from "./grouping";
@@ -37,6 +38,18 @@ const COLLAPSED_STORAGE_KEY = "better-sidebar.collapsed-projects";
  * prefixed, and an `@` is not a character one can contain.
  */
 const QUIET_SECTION_KEY = "@quiet-projects";
+
+/**
+ * The height floor shared by every header-sized control in this list, borrowed
+ * from the host so a coarse pointer grows these rows exactly as far as it grows
+ * BB's own. A 10px uppercase label inside `py-1` is 22px, under the 24px WCAG
+ * 2.5.8 target, and no amount of padding tuning would have tracked the host.
+ */
+const HEADER_HEIGHT =
+  "min-h-[var(--bb-sidebar-row-height,1.5rem)] max-md:pointer-coarse:min-h-[var(--bb-sidebar-row-height-coarse,2.25rem)]";
+
+/** The ring the sort and add controls above the list already use. */
+const FOCUS_RING = "outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 function readCollapsed(): Set<string> {
   try {
@@ -239,19 +252,30 @@ export function ThreadList({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
         {status === "loading" ? null : status === "error" ? (
-          <p
-            role="status"
-            className="px-2 py-6 text-center text-xs text-muted-foreground"
-          >
-            Could not load threads.
-          </p>
+          <div role="status" className="px-4 py-6 text-center">
+            <p className="text-xs font-medium text-foreground">
+              Unable to load threads
+            </p>
+            <p className="mt-1 text-pretty text-xs text-muted-foreground">
+              Check that BB is still running, then reopen the sidebar.
+            </p>
+          </div>
         ) : total === 0 && groups.length === 0 ? (
-          <p
-            role="status"
-            className="px-2 py-6 text-center text-xs text-muted-foreground"
-          >
-            {isSearching ? "No threads found" : "No threads yet"}
-          </p>
+          // An empty state that only shrugs leaves the reader where they
+          // started. Each of these says what the space holds and what to do
+          // next, and the search one names the query it failed on.
+          <div role="status" className="px-4 py-6 text-center">
+            <p className="text-xs font-medium text-foreground">
+              {isSearching
+                ? `No threads match \u201C${searchQuery.trim()}\u201D`
+                : "No threads yet"}
+            </p>
+            <p className="mt-1 text-pretty text-xs text-muted-foreground">
+              {isSearching
+                ? "Clear the search to see every project."
+                : "Start one with the New thread button above and it will appear under its project."}
+            </p>
+          </div>
         ) : (
           <>
             {active.map((group) => renderSection(group, false))}
@@ -261,10 +285,14 @@ export function ThreadList({
                 onClick={() => toggle(QUIET_SECTION_KEY)}
                 aria-expanded={!isQuietCollapsed}
                 className={cn(
-                  "group/quiet mt-3 flex w-full items-center gap-1.5 rounded-md px-2 pb-0.5 pt-2 text-left",
-                  "text-2xs font-semibold uppercase tracking-wide text-muted-foreground/50",
-                  "hover:bg-sidebar-accent/60 hover:text-muted-foreground",
-                  active.length > 0 && "border-t border-border/60",
+                  "group/quiet mt-4 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left",
+                  HEADER_HEIGHT,
+                  FOCUS_RING,
+                  LIST_HOVER_TRANSITION,
+                  // One muted step, not a muted token diluted again by an
+                  // alpha: a section heading still has to be readable.
+                  "text-2xs font-semibold uppercase tracking-wide text-muted-foreground",
+                  "hover:bg-sidebar-accent/60 hover:text-foreground",
                 )}
               >
                 {/* A heading, not a bare rule: it names what follows for a
@@ -280,7 +308,7 @@ export function ThreadList({
                 <Icon
                   name="ChevronDown"
                   className={cn(
-                    "size-3 shrink-0 transition-transform",
+                    "size-3 shrink-0 motion-safe:transition-transform",
                     isQuietCollapsed && "-rotate-90",
                   )}
                 />
@@ -412,18 +440,32 @@ function ProjectSection({
   });
 
   return (
-    <section aria-label={group.projectName} className="pt-2 first:pt-1">
+    // A project is a group, and groups are separated by space rather than a
+    // rule: one step inside the group, two steps between them.
+    <section aria-label={group.projectName} className="pt-3 first:pt-1">
       <ProjectContextMenu groups={menu}>
         <div
           className={cn(
-            "group/header flex w-full items-center gap-1.5 rounded-md pr-1 hover:bg-sidebar-accent/60",
+            "group/header relative flex w-full items-center gap-1.5 rounded-md pr-1",
+            LIST_HOVER_TRANSITION,
+            "hover:bg-sidebar-accent/60",
             isDragging && "opacity-50",
-            // Reachable, but plainly not where the work is.
-            isQuiet && "opacity-55 hover:opacity-100",
-            dropEdge === "before" && "border-t border-t-timeline-accent",
-            dropEdge === "after" && "border-b border-b-timeline-accent",
           )}
         >
+          {/*
+            The drop line is painted, not bordered. A border added on hover
+            grows the header by a pixel and shoves the whole list down on every
+            `dragover`, which reads as the list flinching away from the cursor.
+          */}
+          {dropEdge === null ? null : (
+            <span
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute inset-x-0 h-0.5 rounded-full bg-timeline-accent",
+                dropEdge === "before" ? "-top-px" : "-bottom-px",
+              )}
+            />
+          )}
           <button
             type="button"
             onClick={onToggle}
@@ -459,6 +501,8 @@ function ProjectSection({
             }}
             className={cn(
               "flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 pl-2 text-left",
+              HEADER_HEIGHT,
+              FOCUS_RING,
               isDraggable && "cursor-grab active:cursor-grabbing",
             )}
           >
@@ -466,18 +510,30 @@ function ProjectSection({
               <Icon
                 name="DragDropVertical"
                 className={cn(
-                  "size-3 shrink-0 text-muted-foreground/40",
-                  !isDraggable && "opacity-0",
+                  "size-3 shrink-0 text-muted-foreground",
+                  // Present but quiet until the header is hovered, so the
+                  // handle does not compete with the project name.
+                  "opacity-40 group-hover/header:opacity-100",
+                  LIST_HOVER_TRANSITION,
+                  !isDraggable && "opacity-0 group-hover/header:opacity-0",
                 )}
               />
             ) : null}
             {showIcon ? (
-              <ProjectIcon name={group.projectName} icon={icon} />
+              <ProjectIcon
+                name={group.projectName}
+                icon={icon}
+                // Reachable, but plainly not where the work is. The dimming
+                // lands on the icon alone: applied to the header it also dimmed
+                // the name and count, which are already the palette's quietest
+                // text and cannot afford a second reduction.
+                className={cn(isQuiet && "opacity-50")}
+              />
             ) : null}
             <span className="min-w-0 flex-1 truncate text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
               {group.projectName}
             </span>
-            <span className="shrink-0 text-2xs tabular-nums text-muted-foreground/60">
+            <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
               {group.threadCount > 0 ? group.threadCount : null}
             </span>
             {/* Nothing to expand under a project with no threads. */}
@@ -485,7 +541,7 @@ function ProjectSection({
               <Icon
                 name="ChevronDown"
                 className={cn(
-                  "size-3 shrink-0 text-muted-foreground/60 transition-transform",
+                  "size-3 shrink-0 text-muted-foreground motion-safe:transition-transform",
                   isCollapsed && "-rotate-90",
                 )}
               />
@@ -499,7 +555,7 @@ function ProjectSection({
         // The group heading above the quiet projects already says this; only a
         // project that is empty *inside* the list of active ones repeats it.
         isQuiet ? null : (
-          <p className="px-2 py-1.5 text-2xs text-muted-foreground/70">
+          <p className="px-2 py-1.5 text-2xs text-muted-foreground">
             No threads yet
           </p>
         )
@@ -513,6 +569,9 @@ function ProjectSection({
               showPullRequests={showPullRequests}
               onNavigate={onNavigate}
               label="Pinned"
+              // Pinned threads are their own group inside the project, so the
+              // gap under them is the one that says where they stop.
+              className="pb-1.5"
             />
           ) : null}
           <Branch
@@ -537,6 +596,7 @@ function Branch({
   onNavigate,
   label,
   depth = 0,
+  className,
 }: {
   nodes: readonly ThreadNode[];
   activeThreadId: string | null;
@@ -545,12 +605,13 @@ function Branch({
   onNavigate: () => void;
   label?: string;
   depth?: number;
+  className?: string;
 }) {
   if (nodes.length === 0) return null;
   return (
     <ul
       {...(label === undefined ? {} : { "aria-label": label })}
-      className="flex flex-col gap-px"
+      className={cn("flex flex-col gap-px", className)}
     >
       {nodes.map((node) => (
         <ThreadRow

@@ -4,6 +4,7 @@ import {
   experimental_useSidebarThreadSplit as useSidebarThreadSplit,
 } from "@get-bb/plugin-sdk/app";
 import { Icon } from "@/components/ui/icon";
+import { LIST_HOVER_TRANSITION } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 import { threadSubtitle, threadTitle, type ThreadNode } from "./grouping";
 import { PullRequestBadge } from "./PullRequestBadge";
@@ -12,6 +13,18 @@ import { StatusGlyph } from "./StatusGlyph";
 
 /** Indent per nesting level, matched to the 16px icon column above it. */
 const INDENT_PX = 14;
+
+/**
+ * The row's own height floor, not just its padding.
+ *
+ * `py-1` around 12px text lands at 24px, which is the WCAG 2.5.8 minimum with
+ * nothing to spare, and it ignores the host's coarse-pointer step entirely — on
+ * a touch device every other BB row grows and these stayed thumbnail-sized.
+ * The host publishes the exact heights its own rows use, so this borrows them
+ * rather than inventing a third density.
+ */
+const ROW_HEIGHT =
+  "min-h-[var(--bb-sidebar-row-height,1.5rem)] max-md:pointer-coarse:min-h-[var(--bb-sidebar-row-height-coarse,2.25rem)]";
 
 /** "2nd", "3rd" — for the screen-reader label, where "2" alone says nothing. */
 const ORDINAL_SUFFIXES: Record<Intl.LDMLPluralRule, string> = {
@@ -60,13 +73,27 @@ export function ThreadRow({
       <li className="list-none">
         <div
           className={cn(
-            "relative rounded-md transition-colors",
+            "relative rounded-md",
+            LIST_HOVER_TRANSITION,
             isActive ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60",
             // A thread open in another pane reads as present but not focused.
             !isActive && layout !== null && "bg-sidebar-accent/30",
           )}
           style={{ marginLeft: depth * INDENT_PX }}
         >
+          {/*
+            The rail that makes the nesting readable. Each row draws its own
+            segment through the 1px list gap below it, so a run of siblings
+            reads as one continuous line without the indent moving into the
+            markup, where the parent row's own hit box would have to grow to
+            hold it.
+          */}
+          {depth > 0 ? (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -bottom-px -left-[7px] top-0 w-px bg-border/70"
+            />
+          ) : null}
           {/*
             A full-bleed anchor under the content, the way BB's own row does it:
             a button nested inside an anchor is invalid interactive content and
@@ -94,40 +121,66 @@ export function ThreadRow({
               });
               onNavigate();
             }}
-            className="absolute inset-0 cursor-pointer rounded-md"
+            // The anchor is the row's whole hit target, so it is also the thing
+            // that must show focus — matched to the ring the sort and add
+            // controls above the list already use.
+            className="absolute inset-0 cursor-pointer rounded-md outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
-          <div className="pointer-events-none relative flex items-center gap-1.5 px-2 py-1">
-            {node.stackPosition !== null ? (
+          <div
+            className={cn(
+              "pointer-events-none relative flex items-center gap-1.5 px-2 py-1",
+              ROW_HEIGHT,
+            )}
+          >
+            {/*
+              The active row is not left to a background tint alone: a tint one
+              step from the hover tint is the kind of difference you only see
+              with both on screen at once.
+            */}
+            {isActive ? (
+              <span
+                aria-hidden
+                className="absolute inset-y-1 -left-px w-0.5 rounded-full bg-timeline-accent"
+              />
+            ) : null}
+            {node.stackPosition === null ? null : (
               // The stack's own order, not a count of anything: a plain
               // number reads as the position it is, the way a stacked PR
               // is referred to by where it sits in the stack.
               <span
                 aria-hidden
-                className="w-3 shrink-0 text-right text-2xs tabular-nums text-muted-foreground/70"
+                className="w-3 shrink-0 text-right text-2xs tabular-nums text-muted-foreground"
               >
                 {node.stackPosition}
               </span>
-            ) : null}
+            )}
             {node.thread.originKind === "fork" ? (
-              <Icon name="Fork" className="size-3 shrink-0 text-muted-foreground/60" />
+              <Icon
+                name="Fork"
+                className="size-3 shrink-0 text-muted-foreground"
+              />
             ) : null}
             <span
               className={cn(
                 "min-w-0 flex-1 truncate text-xs",
-                node.thread.isUnread ? "font-medium text-foreground" : "text-foreground/85",
+                node.thread.isUnread || isActive
+                  ? "font-medium text-foreground"
+                  : "text-foreground",
                 // An ancestor kept only to hold a search match is context, not
                 // a result: it stays legible but recedes.
-                node.isSearchAncestor && "text-muted-foreground",
+                node.isSearchAncestor && "font-normal text-muted-foreground",
               )}
             >
               {title}
             </span>
-            {subtitle !== null ? (
-              <span className="max-w-[40%] shrink-0 truncate text-2xs text-muted-foreground/80">
+            {subtitle === null ? null : (
+              <span className="max-w-[40%] shrink-0 truncate text-2xs text-muted-foreground">
                 {subtitle}
               </span>
+            )}
+            {showPullRequests ? (
+              <PullRequestBadge threadId={node.thread.id} />
             ) : null}
-            {showPullRequests ? <PullRequestBadge threadId={node.thread.id} /> : null}
             <span className="flex size-3.5 shrink-0 items-center justify-center">
               <StatusGlyph
                 indicator={node.thread.indicator}

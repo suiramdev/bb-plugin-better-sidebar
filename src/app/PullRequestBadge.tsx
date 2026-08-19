@@ -14,9 +14,13 @@ export function PullRequestBadge({ threadId }: { threadId: string }) {
   return (
     <span
       className={cn(
-        "shrink-0 rounded-sm px-1 text-2xs font-medium tabular-nums",
+        "shrink-0 whitespace-nowrap rounded-sm px-1 text-2xs font-medium tabular-nums",
         toneFor(pullRequest),
       )}
+      // The row's own link owns the accessible name, so the state has to reach
+      // a screen reader from here or not at all: `title` alone is a pointer
+      // affordance on a non-focusable element.
+      aria-label={`Pull request ${pullRequest.number}, ${pullRequest.state}`}
       title={`${pullRequest.title} (${pullRequest.state})`}
     >
       #{pullRequest.number}

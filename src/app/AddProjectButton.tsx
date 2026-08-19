@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/ui/icon";
+import { CONTROL_HOVER_TRANSITION } from "@/components/ui/motion";
+import { cn } from "@/lib/utils";
 
 /**
 * Adds a project from a folder the user picks. It sits opposite the sort
@@ -33,11 +35,27 @@ export function AddProjectButton({
           })
           .finally(() => setIsAdding(false));
       }}
-      className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-1 focus-visible:ring-border disabled:opacity-50"
+      className={cn(
+        "flex size-7 shrink-0 items-center justify-center rounded-md",
+        "max-md:pointer-coarse:size-9",
+        "text-muted-foreground outline-none",
+        CONTROL_HOVER_TRANSITION,
+        "hover:bg-sidebar-accent hover:text-foreground",
+        "focus-visible:ring-1 focus-visible:ring-ring",
+        "disabled:pointer-events-none disabled:opacity-50",
+      )}
       aria-label="Add a project"
       title="Add a project"
     >
-      <Icon name="FolderPlus" className="size-3.5 shrink-0" />
+      <Icon
+        name={isAdding ? "Loading" : "FolderPlus"}
+        // The disabled state is already a static cue; the spin is only there to
+        // say the folder picker is the host's, not a frozen button.
+        className={cn(
+          "size-3.5 shrink-0",
+          isAdding && "motion-safe:animate-spin",
+        )}
+      />
     </button>
   );
 }

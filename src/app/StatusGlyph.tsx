@@ -3,6 +3,15 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 /**
+ * Looping motion is opt-in. A spinner and a pulse both run forever, which is
+ * exactly what `prefers-reduced-motion` exists to stop, so the animation is
+ * gated behind `motion-safe` and the glyph itself carries the meaning either
+ * way — the icon and its label are the signal, the motion is only emphasis.
+ */
+const MOTION_SAFE_SPIN = "motion-safe:animate-spin";
+const MOTION_SAFE_PULSE = "motion-safe:animate-pulse";
+
+/**
  * The status glyph for one row, in BB's own vocabulary: the red circle-x for a
  * failure, the question mark for a raised hand, a spinner for live work, and a
  * dot for a finished thread nobody has read.
@@ -23,7 +32,11 @@ export function StatusGlyph({
   switch (indicator) {
     case "unread-error":
       return (
-        <Icon name="CircleX" aria-label={aria} className={cn(shared, "text-destructive")} />
+        <Icon
+          name="CircleX"
+          aria-label={aria}
+          className={cn(shared, "text-destructive")}
+        />
       );
     case "waiting-for-input":
       return (
@@ -38,7 +51,7 @@ export function StatusGlyph({
         <Icon
           name="Loading"
           aria-label={aria}
-          className={cn(shared, "animate-spin text-muted-foreground/60")}
+          className={cn(shared, MOTION_SAFE_SPIN, "text-muted-foreground")}
         />
       );
     case "workflow":
@@ -54,11 +67,18 @@ export function StatusGlyph({
     case "draft":
     case "working-draft":
       return (
-        <Icon name="Edit" aria-label={aria} className={cn(shared, "text-muted-foreground/70")} />
+        <Icon
+          name="Edit"
+          aria-label={aria}
+          className={cn(shared, "text-muted-foreground")}
+        />
       );
     case "unread-success":
       return (
-        <span aria-label={aria} className={cn("flex items-center justify-center", shared)}>
+        <span
+          aria-label={aria}
+          className={cn("flex items-center justify-center", shared)}
+        >
           <span className="size-[5px] rounded-full bg-timeline-accent" />
         </span>
       );
@@ -78,7 +98,10 @@ function Working({
     <Icon
       name={name}
       aria-label={label}
-      className="size-3.5 shrink-0 animate-pulse text-muted-foreground/60"
+      className={cn(
+        "size-3.5 shrink-0 text-muted-foreground",
+        MOTION_SAFE_PULSE,
+      )}
     />
   );
 }
