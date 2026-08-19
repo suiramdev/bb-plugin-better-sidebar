@@ -4,6 +4,7 @@ import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
   type PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { LIST_HOVER_TRANSITION } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 import { useThreadSelection } from "./SelectionContext";
@@ -15,9 +16,12 @@ import { useThreadSelection } from "./SelectionContext";
  */
 export function RowContextMenu({
   thread,
+  onRename,
   children,
 }: {
   thread: PluginSidebarThread;
+  /** Puts the row itself into edit mode; absent when the row cannot rename. */
+  onRename?: () => void;
   children: ReactNode;
 }) {
   const actions = useSidebarThreadActions();
@@ -45,7 +49,7 @@ export function RowContextMenu({
           {isBulk ? (
             <BulkItems threads={selected} onDone={selection.clear} />
           ) : (
-            <SingleItems thread={thread} />
+            <SingleItems thread={thread} onRename={onRename} />
           )}
         </ContextMenu.Content>
       </ContextMenu.Portal>
@@ -53,27 +57,52 @@ export function RowContextMenu({
   );
 }
 
-function SingleItems({ thread }: { thread: PluginSidebarThread }) {
+function SingleItems({
+  thread,
+  onRename,
+}: {
+  thread: PluginSidebarThread;
+  onRename?: () => void;
+}) {
   const actions = useSidebarThreadActions();
   return (
     <>
-      <MenuItem onSelect={() => actions.open(thread.id, { split: true })}>
+      <MenuItem
+        icon="Columns2"
+        onSelect={() => actions.open(thread.id, { split: true })}
+      >
         Open in split
       </MenuItem>
       <ContextMenu.Separator className="my-1 h-px bg-border" />
       <MenuItem
+        icon={thread.isUnread ? "MailOpen" : "Mail"}
         onSelect={() => void actions.setRead(thread.id, thread.isUnread)}
       >
         {thread.isUnread ? "Mark read" : "Mark unread"}
       </MenuItem>
       <MenuItem
+        icon={thread.isPinned ? "PinOff" : "Pin"}
         onSelect={() => void actions.setPinned(thread.id, !thread.isPinned)}
       >
         {thread.isPinned ? "Unpin" : "Pin"}
       </MenuItem>
+      {onRename === undefined ? null : (
+        // Renaming edits the row in place rather than opening a dialog:
+        // the title is already on screen, and the list is where the
+        // user is judging whether the new name reads right.
+        <MenuItem icon="Edit" onSelect={onRename}>
+          Rename
+        </MenuItem>
+      )}
       <ContextMenu.Separator className="my-1 h-px bg-border" />
-      <MenuItem onSelect={() => actions.archive(thread.id)}>Archive</MenuItem>
-      <MenuItem destructive onSelect={() => actions.requestDelete(thread.id)}>
+      <MenuItem icon="Archive" onSelect={() => actions.archive(thread.id)}>
+        Archive
+      </MenuItem>
+      <MenuItem
+        icon="Trash2"
+        destructive
+        onSelect={() => actions.requestDelete(thread.id)}
+      >
         Delete
       </MenuItem>
     </>
@@ -115,11 +144,13 @@ function BulkItems({
       </div>
       <ContextMenu.Separator className="my-1 h-px bg-border" />
       <MenuItem
+        icon={anyUnread ? "MailOpen" : "Mail"}
         onSelect={() => each((thread) => actions.setRead(thread.id, anyUnread))}
       >
         {anyUnread ? `Mark ${count} read` : `Mark ${count} unread`}
       </MenuItem>
       <MenuItem
+        icon={anyUnpinned ? "Pin" : "PinOff"}
         onSelect={() =>
           each((thread) => actions.setPinned(thread.id, anyUnpinned))
         }
@@ -127,21 +158,29 @@ function BulkItems({
         {anyUnpinned ? `Pin ${count}` : `Unpin ${count}`}
       </MenuItem>
       <ContextMenu.Separator className="my-1 h-px bg-border" />
-      <MenuItem onSelect={() => each((thread) => actions.archive(thread.id))}>
+      <MenuItem
+        icon="Archive"
+        onSelect={() => each((thread) => actions.archive(thread.id))}
+      >
         Archive {count} threads
       </MenuItem>
       <ContextMenu.Separator className="my-1 h-px bg-border" />
-      <MenuItem onSelect={onDone}>Clear selection</MenuItem>
+      <MenuItem icon="X" onSelect={onDone}>
+        Clear selection
+      </MenuItem>
     </>
   );
 }
 
 function MenuItem({
   children,
+  icon,
   destructive = false,
   onSelect,
 }: {
   children: ReactNode;
+  /** Decorative: the label already names the action. */
+  icon: IconName;
   destructive?: boolean;
   onSelect: () => void;
 }) {
@@ -149,7 +188,7 @@ function MenuItem({
     <ContextMenu.Item
       onSelect={onSelect}
       className={cn(
-        "flex cursor-pointer items-center rounded-md px-2 py-1.5 text-sm outline-none",
+        "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none",
         // A menu item is a control, and a coarse pointer needs a bigger one.
         "min-h-6 max-md:pointer-coarse:min-h-9",
         // The pointer is already on the item; a fade would only lag behind it.
@@ -158,6 +197,14 @@ function MenuItem({
         destructive && "text-destructive",
       )}
     >
+      <Icon
+        name={icon}
+        aria-hidden
+        className={cn(
+          "size-4 shrink-0",
+          destructive ? "text-destructive" : "text-muted-foreground",
+        )}
+      />
       {children}
     </ContextMenu.Item>
   );

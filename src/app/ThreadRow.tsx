@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
   experimental_useSidebarThreadSplit as useSidebarThreadSplit,
@@ -68,11 +68,12 @@ export function ThreadRow({
   const selection = useThreadSelection();
   const isSelected = selection.isSelected(node.thread.id);
   const { splitProps, layout } = useSidebarThreadSplit(node.thread.id);
+  const [isRenaming, setIsRenaming] = useState(false);
   const title = threadTitle(node.thread);
   const subtitle = showBranch ? threadSubtitle(node.thread) : null;
 
   return (
-    <RowContextMenu thread={node.thread}>
+    <RowContextMenu thread={node.thread} onRename={() => setIsRenaming(true)}>
       <li className="list-none">
         <div
           className={cn(
@@ -189,25 +190,35 @@ export function ThreadRow({
                 className="size-3 shrink-0 text-muted-foreground"
               />
             ) : null}
-            <span
-              className={cn(
-                "min-w-0 flex-1 truncate text-xs",
-                node.thread.isUnread || isActive
-                  ? "font-medium text-foreground"
-                  : "text-foreground",
-                // An ancestor kept only to hold a search match is context, not
-                // a result: it stays legible but recedes.
-                node.isSearchAncestor && "font-normal text-muted-foreground",
-              )}
-            >
-              {title}
-            </span>
-            {subtitle === null ? null : (
+            {isRenaming ? (
+              <RenameInput
+                title={title}
+                onDone={() => setIsRenaming(false)}
+                onCommit={(next) => {
+                  void actions.rename(node.thread.id, next);
+                }}
+              />
+            ) : (
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate text-xs",
+                  node.thread.isUnread || isActive
+                    ? "font-medium text-foreground"
+                    : "text-foreground",
+                  // An ancestor kept only to hold a search match is context, not
+                  // a result: it stays legible but recedes.
+                  node.isSearchAncestor && "font-normal text-muted-foreground",
+                )}
+              >
+                {title}
+              </span>
+            )}
+            {subtitle === null || isRenaming ? null : (
               <span className="max-w-[40%] shrink-0 truncate text-2xs text-muted-foreground">
                 {subtitle}
               </span>
             )}
-            {showPullRequests ? (
+            {showPullRequests && !isRenaming ? (
               <PullRequestBadge threadId={node.thread.id} />
             ) : null}
             <span className="flex size-3.5 shrink-0 items-center justify-center">
@@ -221,5 +232,74 @@ export function ThreadRow({
         {children}
       </li>
     </RowContextMenu>
+  );
+}
+
+/**
+ * The row's title, in place, while it is being renamed.
+ *
+ * It sits above the row's full-bleed anchor (`pointer-events-auto`, since the
+ * content layer is inert by design), commits on Enter or blur, and abandons on
+ * Escape. An empty or unchanged name commits nothing: a rename that clears the
+ * title is a mis-key, not an instruction.
+ */
+function RenameInput({
+  title,
+  onCommit,
+  onDone,
+}: {
+  title: string;
+  onCommit: (title: string) => void;
+  onDone: () => void;
+}) {
+  const [value, setValue] = useState(title);
+  const input = useRef<HTMLInputElement | null>(null);
+  // Closing the menu that opened this field hands focus back to the row it was
+  // opened from. Taking focus before that handover is over just starts a fight
+  // with it, so the field waits for the menu to finish leaving and only then
+  // treats a blur as "done".
+  const isSettled = useRef(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      isSettled.current = true;
+      input.current?.focus();
+      input.current?.select();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+  const commit = () => {
+    const next = value.trim();
+    if (next.length > 0 && next !== title) onCommit(next);
+    onDone();
+  };
+
+  return (
+    <input
+      ref={input}
+      // The row is a link; typing in it must not navigate or start a drag.
+      onClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      aria-label={`Rename ${title}`}
+      value={value}
+      onChange={(event) => setValue(event.target.value)}
+      onBlur={() => {
+        if (isSettled.current) commit();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit();
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onDone();
+        }
+      }}
+      className={cn(
+        "pointer-events-auto relative z-10 min-w-0 flex-1 rounded-sm bg-background px-1 py-0 text-xs",
+        "text-foreground outline-none ring-1 ring-ring",
+      )}
+    />
   );
 }

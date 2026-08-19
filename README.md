@@ -148,6 +148,10 @@ applies to projects rather than to individual threads.
 Everything destructive still routes through BB — deleting a thread opens BB's
 own confirmation.
 
+Right-clicking a thread gives it the same actions BB's own rows have — open in
+split, mark read or unread, pin, rename, archive, delete — with **Rename**
+editing the title in the row itself: Enter saves, Escape leaves it alone.
+
 ## Development
 
 ```sh

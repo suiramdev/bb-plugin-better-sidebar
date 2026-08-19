@@ -760,3 +760,64 @@ test("only the environments on screen are asked about, once each", async () => {
       .map((call) => call.input),
   ).toEqual([{ environmentIds: ["env_a", "env_b", "env_c"] }]);
 });
+
+/** Right-clicks a thread row and returns its context menu's "Rename" item. */
+async function openRename(slot: Awaited<ReturnType<typeof mountList>>) {
+  const row = await slot.findByText("Fix the flaky test");
+  // Radix opens its context menu from pointerdown, not the contextmenu event.
+  fireEvent.pointerDown(row, { button: 2, ctrlKey: false });
+  fireEvent.contextMenu(row);
+  return await slot.findByRole("menuitem", { name: "Rename" });
+}
+
+test("the thread menu carries an icon beside every action", async () => {
+  const slot = await mountList();
+  await openRename(slot);
+  for (const name of ["Mark unread", "Pin", "Rename", "Archive", "Delete"]) {
+    const item = slot.getByRole("menuitem", { name });
+    expect(item.querySelector("[data-icon]")).toBeTruthy();
+  }
+});
+
+test("renaming edits the row in place and commits the new title on Enter", async () => {
+  const slot = await mountList();
+  fireEvent.click(await openRename(slot));
+
+  const input = (await slot.findByLabelText(
+    "Rename Fix the flaky test",
+  )) as HTMLInputElement;
+  expect(input.value).toBe("Fix the flaky test");
+
+  fireEvent.change(input, { target: { value: "Fix the flake" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+
+  expect(slot.inspection.sidebarActionCalls).toContainEqual(
+    expect.objectContaining({
+      method: "rename",
+      threadId: "thr_root",
+      title: "Fix the flake",
+    }),
+  );
+});
+
+test("Escape abandons a rename, and an empty name commits nothing", async () => {
+  const slot = await mountList();
+  fireEvent.click(await openRename(slot));
+
+  const escaped = await slot.findByLabelText("Rename Fix the flaky test");
+  fireEvent.change(escaped, { target: { value: "Never mind" } });
+  fireEvent.keyDown(escaped, { key: "Escape" });
+  expect(slot.queryByLabelText("Rename Fix the flaky test")).toBeNull();
+  expect(await slot.findByText("Fix the flaky test")).toBeTruthy();
+
+  fireEvent.click(await openRename(slot));
+  const blanked = await slot.findByLabelText("Rename Fix the flaky test");
+  fireEvent.change(blanked, { target: { value: "   " } });
+  fireEvent.keyDown(blanked, { key: "Enter" });
+
+  expect(
+    slot.inspection.sidebarActionCalls.filter(
+      (call: { method: string }) => call.method === "rename",
+    ),
+  ).toEqual([]);
+});
