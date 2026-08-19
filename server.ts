@@ -4,7 +4,8 @@
 // better-sidebar` command. The rules live in src/, where they are testable
 // without a bb server.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import { rpcContract, ICONS_CHANNEL, type FeatureFlags } from "./src/contract";
+import { ICONS_CHANNEL } from "./src/channels";
+import { rpcContract, type FeatureFlags } from "./src/contract";
 import { IconService, type IconServiceProject } from "./src/icon-service";
 import type { FetchLike } from "./src/resolve-icon";
 import { runCli } from "./src/cli";

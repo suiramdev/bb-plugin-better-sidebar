@@ -8,8 +8,8 @@ import {
   useRealtimeConnectionState,
   useRpc,
 } from "@get-bb/plugin-sdk/app";
-import type { rpcContract } from "../contract";
-import { ICONS_CHANNEL, type FeatureFlags, type PublicIcon } from "../contract";
+import type { FeatureFlags, PublicIcon, rpcContract } from "../contract";
+import { ICONS_CHANNEL } from "../channels";
 import { announceIconsChanged } from "./favicon-script";
 
 export const DEFAULT_FEATURES: FeatureFlags = {

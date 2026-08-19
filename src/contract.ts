@@ -40,9 +40,6 @@ export const featureFlagsSchema = z.object({
 });
 export type FeatureFlags = z.infer<typeof featureFlagsSchema>;
 
-/** Realtime channel: published whenever a project's icon record changes. */
-export const ICONS_CHANNEL = "icons";
-
 export const rpcContract = defineRpcContract({
   /** Everything the settings screen needs in one call. */
   overview: {
