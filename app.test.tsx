@@ -783,13 +783,66 @@ test("the thread menu carries an icon beside every action", async () => {
   }
 });
 
+test("a row carries BB's paired hover actions: archive beside the menu", async () => {
+  const slot = await mountList();
+  await slot.findByText("Fix the flaky test");
+
+  // BB's row keeps two controls in the slot the status glyph rests in. The
+  // plugin's list used to ship only the menu, so the quick archive is the
+  // clearest single signal that this is the host's trailing cluster.
+  expect(
+    slot.getAllByRole("button", { name: "Archive thread" }).length,
+  ).toBeGreaterThan(0);
+  expect(
+    slot.getAllByRole("button", { name: "Thread actions" }).length,
+  ).toBeGreaterThan(0);
+});
+
+test("the quick archive action archives through the host", async () => {
+  const slot = await mountList();
+  await slot.findByText("Fix the flaky test");
+
+  fireEvent.click(slot.getAllByRole("button", { name: "Archive thread" })[0]!);
+
+  expect(slot.inspection.sidebarActionCalls).toContainEqual(
+    expect.objectContaining({ method: "archive" }),
+  );
+});
+
+test("picking rows replaces the menu with actions for the whole set", async () => {
+  const slot = await mountList();
+  // The row's hit target is its full-bleed anchor, which carries the title as
+  // its accessible name — the title span itself sits beside it, not inside it.
+  const first = await slot.findByLabelText("Fix the flaky test");
+
+  // Alt-click picks a row without navigating; a second one makes it a set.
+  fireEvent.click(first, { altKey: true });
+  fireEvent.click(await slot.findByLabelText("Ship the invoice export"), {
+    altKey: true,
+  });
+
+  fireEvent.pointerDown(first, { button: 2 });
+  fireEvent.contextMenu(first);
+
+  // The set's menu speaks about the set, and says nothing about this one row.
+  // Both fixture threads are already read, so the entry offers the move it can
+  // actually make rather than mirroring one row's state.
+  expect(
+    await slot.findByRole("menuitem", { name: "Mark 2 unread" }),
+  ).toBeTruthy();
+  expect(
+    slot.getByRole("menuitem", { name: "Archive 2 threads" }),
+  ).toBeTruthy();
+  expect(slot.queryByRole("menuitem", { name: "Rename" })).toBeNull();
+});
+
 test("renaming edits the row in place and commits the new title on Enter", async () => {
   const slot = await mountList();
   fireEvent.click(await openRename(slot));
 
-  const input = (await slot.findByLabelText(
-    "Rename Fix the flaky test",
-  )) as HTMLInputElement;
+  // "Thread name" is the host's own label for its inline title editor, which
+  // this list now renders rather than a private lookalike.
+  const input = (await slot.findByLabelText("Thread name")) as HTMLInputElement;
   expect(input.value).toBe("Fix the flaky test");
 
   fireEvent.change(input, { target: { value: "Fix the flake" } });
@@ -808,14 +861,14 @@ test("Escape abandons a rename, and an empty name commits nothing", async () => 
   const slot = await mountList();
   fireEvent.click(await openRename(slot));
 
-  const escaped = await slot.findByLabelText("Rename Fix the flaky test");
+  const escaped = await slot.findByLabelText("Thread name");
   fireEvent.change(escaped, { target: { value: "Never mind" } });
   fireEvent.keyDown(escaped, { key: "Escape" });
-  expect(slot.queryByLabelText("Rename Fix the flaky test")).toBeNull();
+  expect(slot.queryByLabelText("Thread name")).toBeNull();
   expect(await slot.findByText("Fix the flaky test")).toBeTruthy();
 
   fireEvent.click(await openRename(slot));
-  const blanked = await slot.findByLabelText("Rename Fix the flaky test");
+  const blanked = await slot.findByLabelText("Thread name");
   fireEvent.change(blanked, { target: { value: "   " } });
   fireEvent.keyDown(blanked, { key: "Enter" });
 

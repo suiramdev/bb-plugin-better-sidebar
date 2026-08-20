@@ -35,8 +35,9 @@ import { useSidebarData, useStackBranches } from "./useSidebarData";
 import { applyStacks, environmentIdsFor } from "./stacking";
 import { orderedThreadIds } from "./selection";
 import { ThreadSelectionProvider } from "./SelectionContext";
+import { CHROME_SECTION_LABEL_CLASS } from "@/components/ui/chrome-style-tokens";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
-  CHROME_SECTION_LABEL_CLASS,
   SIDEBAR_HOVER_ACTIONS_CLASS,
   SIDEBAR_HOVER_ACTIONS_GAP_CLASS,
   SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
@@ -147,6 +148,7 @@ function useCollapsed(storageKey: string): [Set<string>, (id: string) => void] {
 export function ThreadList({
   activeThreadId,
   activeProjectId,
+  isCompactViewport,
   onNavigate,
   searchQuery,
 }: PluginThreadListProps) {
@@ -304,6 +306,7 @@ export function ThreadList({
       showPullRequests={features.showPullRequests}
       onNavigate={onNavigate}
       worktrees={worktrees}
+      isCompact={isCompactViewport}
       isManual={isManual}
       isDragging={dragging === group.projectId}
       canStepUp={isManual && orderedProjectIds.indexOf(group.projectId) > 0}
@@ -328,102 +331,115 @@ export function ThreadList({
   );
 
   return (
-    <ThreadSelectionProvider order={visibleThreadIds} threads={threads}>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex shrink-0 items-center justify-between px-2 pb-1">
-          <SortMenu value={preferences.projectSort} onChange={setProjectSort} />
-          <AddProjectButton onAdd={addProject} />
-        </div>
-        {/*
+    // The host wraps its whole sidebar in this provider, with these exact
+    // settings — `disableHoverableContent` dismisses a tooltip the moment the
+    // pointer leaves the trigger, so it never lingers while the mouse moves on.
+    // A plugin list always renders inside that provider, so this one is nested
+    // and changes nothing at runtime; it is what keeps the row's tooltips
+    // working when this list is rendered on its own, as the tests do.
+    <TooltipProvider delayDuration={300} disableHoverableContent>
+      <ThreadSelectionProvider order={visibleThreadIds} threads={threads}>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between px-2 pb-1">
+            <SortMenu
+              value={preferences.projectSort}
+              onChange={setProjectSort}
+            />
+            <AddProjectButton onAdd={addProject} />
+          </div>
+          {/*
           No horizontal padding, because BB's list has none: `ProjectListShell`
           is a bare `SidebarGroupContent` and the panel itself carries only
           safe-area insets. Every row's own `pl-2` is the whole left offset,
           which is what puts a title 8px from the panel edge — and what lets a
           row's hover fill run edge to edge instead of floating in a gutter.
         */}
-        <div className="min-h-0 flex-1 overflow-y-auto pb-2">
-          {status === "loading" ? null : status === "error" ? (
-            <div role="status" className="px-4 py-6 text-center">
-              <p className="text-xs font-medium text-foreground">
-                Unable to load threads
-              </p>
-              <p className="mt-1 text-pretty text-xs text-subtle-foreground/75">
-                Check that BB is still running, then reopen the sidebar.
-              </p>
-            </div>
-          ) : total === 0 && groups.length === 0 ? (
-            // An empty state that only shrugs leaves the reader where they
-            // started. Each of these says what the space holds and what to do
-            // next, and the search one names the query it failed on.
-            <div role="status" className="px-4 py-6 text-center">
-              <p className="text-xs font-medium text-foreground">
-                {isSearching
-                  ? `No threads match \u201C${searchQuery.trim()}\u201D`
-                  : "No threads yet"}
-              </p>
-              <p className="mt-1 text-pretty text-xs text-subtle-foreground/75">
-                {isSearching
-                  ? "Clear the search to see every project."
-                  : "Start one with the New thread button above and it will appear under its project."}
-              </p>
-            </div>
-          ) : (
-            // `space-y-4`, from the host's `SidebarSectionOrderList`. In BB's
-            // project mode each project *is* a top-level sidebar section, and
-            // those are separated by 16px — four times the step inside a
-            // project, which is what makes one project read as one block.
-            // (`ProjectListProjects` uses `gap-1`, but that path is the
-            // isolated collection the stories render, not the live list.)
-            <div className="min-w-0 space-y-4">{groups.map(renderSection)}</div>
-          )}
+          <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+            {status === "loading" ? null : status === "error" ? (
+              <div role="status" className="px-4 py-6 text-center">
+                <p className="text-xs font-medium text-foreground">
+                  Unable to load threads
+                </p>
+                <p className="mt-1 text-pretty text-xs text-subtle-foreground/75">
+                  Check that BB is still running, then reopen the sidebar.
+                </p>
+              </div>
+            ) : total === 0 && groups.length === 0 ? (
+              // An empty state that only shrugs leaves the reader where they
+              // started. Each of these says what the space holds and what to do
+              // next, and the search one names the query it failed on.
+              <div role="status" className="px-4 py-6 text-center">
+                <p className="text-xs font-medium text-foreground">
+                  {isSearching
+                    ? `No threads match \u201C${searchQuery.trim()}\u201D`
+                    : "No threads yet"}
+                </p>
+                <p className="mt-1 text-pretty text-xs text-subtle-foreground/75">
+                  {isSearching
+                    ? "Clear the search to see every project."
+                    : "Start one with the New thread button above and it will appear under its project."}
+                </p>
+              </div>
+            ) : (
+              // `space-y-4`, from the host's `SidebarSectionOrderList`. In BB's
+              // project mode each project *is* a top-level sidebar section, and
+              // those are separated by 16px — four times the step inside a
+              // project, which is what makes one project read as one block.
+              // (`ProjectListProjects` uses `gap-1`, but that path is the
+              // isolated collection the stories render, not the live list.)
+              <div className="min-w-0 space-y-4">
+                {groups.map(renderSection)}
+              </div>
+            )}
+          </div>
+
+          <Dialog
+            open={editing !== null}
+            onOpenChange={(open) => !open && setEditing(null)}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Project icon</DialogTitle>
+              </DialogHeader>
+              {editingProject === null ? null : (
+                <IconEditor
+                  projectId={editingProject.id}
+                  projectName={editingProject.name}
+                  // The sidebar's project payload has no remote; the editor only
+                  // uses it for an explanatory line, and refetching resolves it.
+                  gitRemoteUrl={null}
+                  icon={icons[editingProject.id]}
+                  onChanged={refresh}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={deleting !== null}
+            onOpenChange={(open) => !open && setDeleting(null)}
+          >
+            <DialogContent className="sm:max-w-md">
+              {deletingGroup === null ? null : (
+                <DeleteProjectDialog
+                  // A fresh dialog per project: the confirmation must never open
+                  // already half-answered from the last time.
+                  key={deletingGroup.projectId}
+                  projectName={deletingGroup.projectName}
+                  threadCount={deletingGroup.threadCount}
+                  onCancel={() => setDeleting(null)}
+                  onConfirm={async () => {
+                    await deleteProject(deletingGroup.projectId);
+                    setDeleting(null);
+                    toast.success(`Deleted ${deletingGroup.projectName}.`);
+                  }}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
-
-        <Dialog
-          open={editing !== null}
-          onOpenChange={(open) => !open && setEditing(null)}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Project icon</DialogTitle>
-            </DialogHeader>
-            {editingProject === null ? null : (
-              <IconEditor
-                projectId={editingProject.id}
-                projectName={editingProject.name}
-                // The sidebar's project payload has no remote; the editor only
-                // uses it for an explanatory line, and refetching resolves it.
-                gitRemoteUrl={null}
-                icon={icons[editingProject.id]}
-                onChanged={refresh}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
-
-        <Dialog
-          open={deleting !== null}
-          onOpenChange={(open) => !open && setDeleting(null)}
-        >
-          <DialogContent className="sm:max-w-md">
-            {deletingGroup === null ? null : (
-              <DeleteProjectDialog
-                // A fresh dialog per project: the confirmation must never open
-                // already half-answered from the last time.
-                key={deletingGroup.projectId}
-                projectName={deletingGroup.projectName}
-                threadCount={deletingGroup.threadCount}
-                onCancel={() => setDeleting(null)}
-                onConfirm={async () => {
-                  await deleteProject(deletingGroup.projectId);
-                  setDeleting(null);
-                  toast.success(`Deleted ${deletingGroup.projectName}.`);
-                }}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
-      </div>
-    </ThreadSelectionProvider>
+      </ThreadSelectionProvider>
+    </TooltipProvider>
   );
 }
 
@@ -440,6 +456,7 @@ function ProjectSection({
   showPullRequests,
   onNavigate,
   worktrees,
+  isCompact,
   isManual,
   isDragging,
   canStepUp,
@@ -462,6 +479,8 @@ function ProjectSection({
   showPullRequests: boolean;
   onNavigate: () => void;
   worktrees: WorktreeView;
+  /** True on phone-width viewports and coarse pointers; sets the row height. */
+  isCompact: boolean;
   /** True while the list follows BB's manual project order. */
   isManual: boolean;
   isDragging: boolean;
@@ -615,7 +634,6 @@ function ProjectSection({
                 // closed one keeps it, because it is the only thing saying
                 // there is something folded away.
                 revealOnHover={!isCollapsed}
-                className="size-6"
               />
             )}
           </span>
@@ -652,6 +670,7 @@ function ProjectSection({
               showPullRequests={showPullRequests}
               onNavigate={onNavigate}
               worktrees={worktrees}
+              isCompact={isCompact}
               label="Pinned"
               // Pinned threads are their own group inside the project, so the
               // gap under them is the one that says where they stop.
@@ -665,6 +684,7 @@ function ProjectSection({
             showPullRequests={showPullRequests}
             onNavigate={onNavigate}
             worktrees={worktrees}
+            isCompact={isCompact}
           />
         </div>
       )}
@@ -686,6 +706,7 @@ function Branch({
   showPullRequests,
   onNavigate,
   worktrees,
+  isCompact,
   label,
   depth = 0,
   className,
@@ -696,6 +717,7 @@ function Branch({
   showPullRequests: boolean;
   onNavigate: () => void;
   worktrees: WorktreeView;
+  isCompact: boolean;
   label?: string;
   depth?: number;
   className?: string;
@@ -713,7 +735,7 @@ function Branch({
     <ThreadRow
       key={node.thread.id}
       node={node}
-      depth={rowDepth}
+      options={{ kind: "default", depth: rowDepth, isCompact }}
       isActive={node.thread.id === activeThreadId}
       showBranch={showBranch}
       inWorktreeGroup={inWorktreeGroup}
@@ -727,6 +749,7 @@ function Branch({
         showPullRequests={showPullRequests}
         onNavigate={onNavigate}
         worktrees={worktrees}
+        isCompact={isCompact}
         depth={rowDepth + 1}
         // A nested block is denser than a top-level list, which is BB's own
         // `relative space-y-px` under a parent row.

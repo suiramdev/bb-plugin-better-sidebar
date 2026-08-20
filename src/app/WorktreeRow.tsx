@@ -24,11 +24,12 @@ import {
   SIDEBAR_MORE_ACTION_TRIGGER_CLASS,
   SIDEBAR_ROW_BASE_CLASS,
   SIDEBAR_ROW_GLYPH_SLOT_CLASS,
-  SIDEBAR_THREAD_GROUP_LINE_CLASS,
-  SIDEBAR_THREAD_LINE_CONTINUATION_CLASS,
-  getSidebarThreadGroupLineLeft,
   getSidebarThreadRowPaddingLeft,
 } from "./sidebarRowClasses";
+import {
+  ThreadTreeGroupLine,
+  ThreadTreeLineContinuation,
+} from "./ThreadTreeLines";
 import type { WorktreeGroup } from "./worktrees";
 
 /**
@@ -94,11 +95,7 @@ export function WorktreeRow({
         {parentLineDepth === null ? null : (
           // An outer group's hairline would otherwise break where this header
           // interrupts it, so the header carries the segment through.
-          <span
-            aria-hidden
-            className={SIDEBAR_THREAD_LINE_CONTINUATION_CLASS}
-            style={{ left: getSidebarThreadGroupLineLeft(parentLineDepth) }}
-          />
+          <ThreadTreeLineContinuation parentRowDepth={parentLineDepth} />
         )}
         {group.stackPosition === null ? null : (
           // The level's place in the stack, in the same slot and the same
@@ -164,11 +161,7 @@ export function WorktreeRow({
         // The hairline that ties the group's rows to the header above them,
         // dropped from the centre of its glyph column.
         <div className="relative">
-          <span
-            aria-hidden
-            className={SIDEBAR_THREAD_GROUP_LINE_CLASS}
-            style={{ left: getSidebarThreadGroupLineLeft(depth) }}
-          />
+          <ThreadTreeGroupLine parentRowDepth={depth} />
           {children}
         </div>
       )}
