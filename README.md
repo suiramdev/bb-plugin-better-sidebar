@@ -74,6 +74,13 @@ the order alone, so browsing never reshuffles the list under your cursor, and no
 mode reacts to the route you are on. The project you are viewing still always
 shows its header, even with no threads of its own — it just keeps its place.
 
+**Every project is listed, always.** A project with no threads is a header row
+like any other, dimmed and carrying no caret because there is nothing under it
+to open. Empty ones used to sink into a collapsible "No threads yet" section,
+which hid them the moment it was folded and remembered that fold across mounts
+— a project you cannot see is one you cannot reach, and reaching them is what
+the sidebar is for.
+
 **Manual order is BB's own project order.** Dragging a project here calls BB's
 `projects.reorder`, so BB's built-in sidebar shows the same order and there is
 no second, drifting copy of it. Reordering never depends on drag alone — every
@@ -89,7 +96,7 @@ Sibling threads sitting in the same worktree fold under one header naming it —
 BB's own sidebar behaviour, with its `FolderGit` glyph and its rules:
 
 ```text
-▾ feat/parser              2   ← the worktree, and what it holds
+▾ feat/parser                  ← the worktree, and what it holds
     Wire the parser
     Cover the parser
   Bump the deps       chore/deps  ← alone in its worktree, so a plain row
@@ -120,16 +127,16 @@ without a special case: a level holding one thread is a numbered row, and a
 level holding several is a numbered worktree group — the bottom included.
 
 ```text
-1 ▾ feat/auth           2   ← the branch cut from main, two threads on it
+1 ▾ feat/auth               ← the branch cut from main, two threads on it
       Add auth endpoints
       Review the endpoints
-2 ▾ feat/hash           2   ← based on feat/auth
+2 ▾ feat/hash               ← based on feat/auth
       Hash passwords
       Fix the salt
 3   Add refresh tokens      ← based on feat/hash, one thread, so a row
 ```
 
-**Every level is a sibling.** The stack used to hang off its bottom *thread*,
+**Every level is a sibling.** The stack used to hang off its bottom _thread_,
 which made that one thread both a row and the stack's container: the bottom
 could never be a group, and its siblings were pushed underneath it as peers of
 the branches built on top of them — two different relationships drawn as one. A

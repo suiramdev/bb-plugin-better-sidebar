@@ -33,8 +33,6 @@ export interface WorktreeGroup {
  name: string;
  /** At least two, in the order they were given. */
  nodes: ThreadNode[];
- /** Every thread under the header, nesting included. */
- threadCount: number;
  /**
   * The group's place in a stack, when every thread in it sits on the same
   * stacked branch. A stack level *is* a worktree, so the number belongs on
@@ -73,10 +71,6 @@ export function worktreeName(thread: PluginSidebarThread): string {
  const branchName = environment?.branchName ?? null;
  if (branchName !== null && branchName.trim() !== "") return branchName;
  return UNNAMED_WORKTREE;
-}
-
-function countNodes(nodes: readonly ThreadNode[]): number {
- return nodes.reduce((total, node) => total + 1 + countNodes(node.children), 0);
 }
 
 /**
@@ -149,7 +143,6 @@ export function groupWorktrees(nodes: readonly ThreadNode[]): ThreadItem[] {
     // The header now carries the stack number, so the rows under it stop
     // repeating it — one statement, in one place.
     nodes: bucket.map((member) => ({ ...member, stackPosition: null })),
-    threadCount: countNodes(bucket),
     stackPosition: node.stackPosition,
    },
   });

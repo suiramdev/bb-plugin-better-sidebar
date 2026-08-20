@@ -38,7 +38,6 @@ import { ThreadSelectionProvider } from "./SelectionContext";
 import {
   CHROME_SECTION_LABEL_CLASS,
   SIDEBAR_HOVER_ACTIONS_CLASS,
-  SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
   SIDEBAR_HOVER_ACTIONS_GAP_CLASS,
   SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
 } from "./sidebarHoverActions";
@@ -49,13 +48,6 @@ import {
 
 const COLLAPSED_STORAGE_KEY = "better-sidebar.collapsed-projects";
 const COLLAPSED_WORKTREES_KEY = "better-sidebar.collapsed-worktrees";
-
-/**
- * The quiet group collapses like a project does, so it rides in the same
- * persisted set. No BB project id can collide with this: they are `proj_`-
- * prefixed, and an `@` is not a character one can contain.
- */
-const QUIET_SECTION_KEY = "@quiet-projects";
 
 /**
  * Everything the rows need to know about worktree grouping, as one value.
@@ -262,13 +254,11 @@ export function ThreadList({
   // Dragging is only meaningful while the list follows the order it writes.
   const isManual = preferences.projectSort === "manual" && !isSearching;
 
-  // Quiet projects stay reachable, but they are not what the list is about:
-  // they sink below the ones with threads instead of scattering empty rows
-  // through it. Inside each half the chosen sort still decides the order.
-  const active = groups.filter((group) => group.threadCount > 0);
-  const quiet = groups.filter((group) => group.threadCount === 0);
-  // A search shows what it found, whatever the user collapsed.
-  const isQuietCollapsed = !isSearching && collapsed.has(QUIET_SECTION_KEY);
+  // Every project is a row, in the order the chosen sort put it. Empty ones
+  // used to sink into a collapsible "No threads yet" section below the rest,
+  // which hid them the moment it was folded — and it persisted that fold, so a
+  // project could stay out of sight for good. A project you cannot see is one
+  // you cannot reach, and reaching them is what the sidebar is for.
 
   // One object rather than three props drilled through a recursive component.
   // A search is the one thing that overrides a collapse: it answers a question,
@@ -289,21 +279,20 @@ export function ThreadList({
   const visibleThreadIds = useMemo(
     () =>
       orderedThreadIds(
-        [...active, ...(isQuietCollapsed ? [] : quiet)],
+        groups,
         (projectId) => !(!isSearching && collapsed.has(projectId)),
         (environmentId) =>
           !worktrees.enabled || !worktrees.isCollapsed(environmentId),
       ),
-    [active, quiet, isQuietCollapsed, isSearching, collapsed, worktrees],
+    [groups, isSearching, collapsed, worktrees],
   );
 
-  const renderSection = (group: ProjectGroup, isQuiet: boolean) => (
+  const renderSection = (group: ProjectGroup) => (
     <ProjectSection
       key={group.projectId}
       group={group}
       icon={icons[group.projectId]}
       showIcon={features.projectIcons}
-      isQuiet={isQuiet}
       // A search shows what it found, whatever the user collapsed.
       isCollapsed={!isSearching && collapsed.has(group.projectId)}
       onToggle={() => toggle(group.projectId)}
@@ -376,60 +365,7 @@ export function ThreadList({
             // rather than a per-section top padding. BB's project list is a
             // `SidebarMenu` with `gap-1`; this is that list.
             <div className="flex w-full min-w-0 flex-col gap-1">
-              {active.map((group) => renderSection(group, false))}
-              {quiet.length > 0 ? (
-                // The same header a project gets, down to which element does
-                // what: the row is not itself a button. A full-bleed
-                // aria-hidden target takes the pointer, the caret is the real
-                // control and owns keyboard focus, and the row carries no
-                // hover fill of its own — the caret brings its own.
-                <div
-                  className={cn(
-                    SECTION_HEADER_CLASS,
-                    SIDEBAR_HOVER_ACTIONS_GAP_CLASS,
-                    // The one place this list still spends vertical space: the
-                    // boundary between the projects you are working in and the
-                    // ones merely present.
-                    "mt-3 pr-2",
-                  )}
-                >
-                  <button
-                    type="button"
-                    aria-hidden="true"
-                    tabIndex={-1}
-                    onClick={() => toggle(QUIET_SECTION_KEY)}
-                    className="absolute inset-0 rounded-md"
-                  />
-                  <span className={SECTION_HEADER_LABEL_CLASS}>
-                    {/* A heading, not a bare rule: it names what follows for a
-                      screen reader, where dimmed rows say nothing at all. */}
-                    <span
-                      role="heading"
-                      aria-level={2}
-                      className="min-w-0 truncate"
-                    >
-                      No threads yet
-                    </span>
-                    <SidebarChildToggleChevron
-                      isCollapsed={isQuietCollapsed}
-                      expandLabel="Expand No threads yet section"
-                      collapseLabel="Collapse No threads yet section"
-                      onToggle={() => toggle(QUIET_SECTION_KEY)}
-                      revealOnHover={!isQuietCollapsed}
-                      className="size-6"
-                    />
-                  </span>
-                  {/* It counts what it hides, so a collapsed group is not a
-                    mystery. Nothing competes for this slot here, so unlike a
-                    project's count it stays in flow and never fades. */}
-                  <span className="relative z-10 shrink-0 tabular-nums">
-                    {quiet.length}
-                  </span>
-                </div>
-              ) : null}
-              {isQuietCollapsed
-                ? null
-                : quiet.map((group) => renderSection(group, true))}
+              {groups.map(renderSection)}
             </div>
           )}
         </div>
@@ -487,7 +423,6 @@ function ProjectSection({
   group,
   icon,
   showIcon,
-  isQuiet,
   isCollapsed,
   onToggle,
   onEditIcon,
@@ -509,8 +444,6 @@ function ProjectSection({
   group: ProjectGroup;
   icon: Parameters<typeof ProjectIcon>[0]["icon"];
   showIcon: boolean;
-  /** A project with no threads: present, but dimmed and closed. */
-  isQuiet: boolean;
   isCollapsed: boolean;
   onToggle: () => void;
   onEditIcon: () => void;
@@ -540,6 +473,9 @@ function ProjectSection({
   // The personal project sits outside BB's project order, so it cannot be
   // dragged and nothing can be dropped onto it.
   const isDraggable = isManual && group.position !== null;
+  // Nothing to expand, and nothing to say about it: the header alone is the
+  // whole of an empty project.
+  const isEmpty = group.threadCount === 0;
 
   const edgeFor = (event: React.DragEvent<HTMLElement>): "before" | "after" => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -648,18 +584,19 @@ function ProjectSection({
               <ProjectIcon
                 name={group.projectName}
                 icon={icon}
-                // Reachable, but plainly not where the work is. The dimming
-                // lands on the icon alone: applied to the header it also dimmed
-                // the name and count, which are already the palette's quietest
-                // text and cannot afford a second reduction.
-                className={cn(isQuiet && "opacity-50")}
+                // A project with nothing in it is reachable, but plainly not
+                // where the work is. The dimming lands on the icon alone:
+                // applied to the header it also dimmed the name, which is
+                // already the palette's quietest text and cannot afford a
+                // second reduction.
+                className={cn(isEmpty && "opacity-50")}
               />
             ) : null}
             <span className="min-w-0 truncate" title={group.projectName}>
               {group.projectName}
             </span>
             {/* Nothing to expand under a project with no threads. */}
-            {isQuiet ? null : (
+            {isEmpty ? null : (
               <SidebarChildToggleChevron
                 isCollapsed={isCollapsed}
                 expandLabel={`Expand ${group.projectName} section`}
@@ -674,22 +611,6 @@ function ProjectSection({
               />
             )}
           </span>
-          {/*
-            The thread count rests where BB puts a collapsed group's rollup
-            glyph, and yields the slot to the actions the moment the row is
-            hovered or focused.
-          */}
-          {group.threadCount > 0 ? (
-            <span
-              aria-hidden
-              className={cn(
-                SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
-                "pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 tabular-nums",
-              )}
-            >
-              {group.threadCount}
-            </span>
-          ) : null}
           <span className="relative z-20 inline-flex h-6 shrink-0 items-center">
             <span
               className={cn(
@@ -707,15 +628,7 @@ function ProjectSection({
         </div>
       </ProjectContextMenu>
 
-      {isCollapsed ? null : group.threadCount === 0 ? (
-        // The group heading above the quiet projects already says this; only a
-        // project that is empty *inside* the list of active ones repeats it.
-        isQuiet ? null : (
-          <p className="mt-1 py-0.5 pl-8 pr-2 text-xs leading-4 text-subtle-foreground/60">
-            No threads yet
-          </p>
-        )
-      ) : (
+      {isCollapsed || isEmpty ? null : (
         // No hairline down the project's threads. BB reserves that for its
         // `project` tree variant, which also pushes its root rows one depth
         // step in to clear the line; the variant a project actually renders

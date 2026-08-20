@@ -18,7 +18,6 @@ import {
 import { SidebarChildToggleChevron } from "./SidebarChildToggleChevron";
 import {
   SIDEBAR_HOVER_ACTIONS_CLASS,
-  SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
   SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
 } from "./sidebarHoverActions";
 import {
@@ -127,21 +126,9 @@ export function WorktreeRow({
             COARSE_POINTER_ROW_ACTION_SIZE_CLASS,
           )}
         >
-          {/*
-            What the header stands for, at rest: how many threads are in the
-            worktree. It yields the slot the moment the row is hovered, the way
-            BB's collapsed status roll-up does.
-          */}
-          <span
-            aria-hidden
-            data-sidebar-hover-actions-open={isMenuOpen ? "true" : undefined}
-            className={cn(
-              SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
-              "pointer-events-none absolute inset-0 flex items-center justify-center text-2xs tabular-nums text-subtle-foreground",
-            )}
-          >
-            {group.threadCount}
-          </span>
+          {/* Nothing rests in this slot: it is held open at the row-action
+            size so the actions have somewhere to land on hover without the
+            row changing width. */}
           <div
             data-sidebar-hover-actions-open={isMenuOpen ? "true" : undefined}
             className={cn(

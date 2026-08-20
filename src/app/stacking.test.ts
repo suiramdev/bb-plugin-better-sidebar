@@ -183,13 +183,7 @@ test("a stack is a flat run however long the chain is", () => {
 
   // No nesting at all now: a stack is a run of sibling levels.
   expect(Math.max(...depths)).toBe(0);
-  expect(shape(group!.roots)).toEqual([
-    "a:1",
-    "b:2",
-    "c:3",
-    "d:4",
-    "e:5",
-  ]);
+  expect(shape(group!.roots)).toEqual(["a:1", "b:2", "c:3", "d:4", "e:5"]);
 });
 
 test("a base branch that is not on screen leaves its thread a plain root", () => {
@@ -304,12 +298,7 @@ test("a remote-prefixed trunk is recognised as trunk, not as a stack link", () =
 
   // The three "in continuity of" threads are one stack; the fourth was cut
   // from trunk and stands apart rather than joining it.
-  expect(shape(group!.roots)).toEqual([
-    "pan:-",
-    "shell:1",
-    "pane:2",
-    "cli:3",
-  ]);
+  expect(shape(group!.roots)).toEqual(["pan:-", "shell:1", "pane:2", "cli:3"]);
 });
 
 test("a thread sitting on trunk does not collect every branch cut from it", () => {

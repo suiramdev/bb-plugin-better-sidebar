@@ -481,55 +481,30 @@ const WITH_QUIET_PROJECT = {
   ],
 };
 
-test("a project with no threads is still listed, dimmed and below the rest", async () => {
+test("a project with no threads is listed like any other, only dimmed", async () => {
   const slot = await mountList({}, { sidebarThreads: WITH_QUIET_PROJECT });
   const quiet = await slot.findByLabelText("docs");
 
-  // Last in the list, under a heading that says why it is set apart.
-  const sections = [...slot.container.querySelectorAll("section")];
-  expect(sections[sections.length - 1]).toBe(quiet);
-  const heading = slot.getByRole("heading", { name: "No threads yet" });
+  // No "No threads yet" section to sink into, and nothing that can fold it out
+  // of sight: every project is a row in the list's own order.
+  expect(slot.queryByRole("heading", { name: "No threads yet" })).toBeNull();
   expect(
-    heading.compareDocumentPosition(quiet) & Node.DOCUMENT_POSITION_FOLLOWING,
-  ).toBeTruthy();
+    [...slot.container.querySelectorAll("section")].map((section) =>
+      section.getAttribute("aria-label"),
+    ),
+  ).toEqual(["bb", "billing", "docs"]);
 
   // Dimmed, and dimmed only here: the projects with threads stay at full
   // strength. The dimming lands on the project's icon, not on the header —
-  // applied to the header it also faded the name and count, which are already
-  // drawn in the palette's quietest text token.
+  // applied to the header it also faded the name, which is already drawn in
+  // the palette's quietest text token.
   expect(quiet.querySelector(".opacity-50")).toBeTruthy();
   expect(slot.getByLabelText("bb").querySelector(".opacity-50")).toBeNull();
-});
 
-test("the quiet group collapses, and stays collapsed on the next mount", async () => {
-  localStorage.clear();
-  const slot = await mountList({}, { sidebarThreads: WITH_QUIET_PROJECT });
-  await slot.findByLabelText("docs");
-
-  // The caret is the control, exactly as it is on a project header: it owns
-  // aria-expanded and the keyboard focus, and it is not the whole row.
-  const toggle = slot.getByRole("button", { name: /No threads yet/ });
-  expect(toggle.getAttribute("aria-expanded")).toBe("true");
-  // It counts what it hides, so a collapsed group is not a mystery. The count
-  // sits on the header row beside the caret, not inside it.
-  const header = toggle.closest("div");
-  expect(header?.textContent).toContain("1");
-
-  fireEvent.click(toggle);
-  await vi.waitFor(() => expect(slot.queryByLabelText("docs")).toBeNull());
-  // The heading survives its own collapse; the projects with threads do too.
+  // Nothing to expand, so it carries no caret and no body.
   expect(
-    slot
-      .getByRole("button", { name: /No threads yet/ })
-      .getAttribute("aria-expanded"),
-  ).toBe("false");
-  expect(slot.getByLabelText("bb")).toBeTruthy();
-
-  mounted.pop()!.lifecycle.unmount();
-  const remounted = await mountList({}, { sidebarThreads: WITH_QUIET_PROJECT });
-  await remounted.findByText("bb");
-  expect(remounted.queryByLabelText("docs")).toBeNull();
-  localStorage.clear();
+    slot.queryByRole("button", { name: /docs section/ }),
+  ).toBeNull();
 });
 test("every project carries an actions button that opens the project menu", async () => {
   const slot = await mountList({}, { sidebarThreads: WITH_QUIET_PROJECT });
@@ -910,10 +885,11 @@ test("threads sharing a worktree fold under one header, alone ones do not", asyn
   ).toBeNull();
   expect(slot.getByText("Bump the deps")).toBeTruthy();
 
-  // The header counts what it holds and carries BB's worktree glyph.
+  // The header carries BB's worktree glyph, and no count: the rows it holds
+  // are right there to be read.
   const row = header.closest("div.bb-sidebar-hover-actions-row")!;
-  expect(row.textContent).toContain("2");
   expect(row.querySelector('[data-icon="FolderGit"]')).toBeTruthy();
+  expect(row.textContent).toBe("feat/parser");
 });
 
 test("a worktree collapses, and stays collapsed on the next mount", async () => {
