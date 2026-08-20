@@ -75,6 +75,7 @@ test("overview lists every project, personal included, with its icon", async () 
     showBranch: true,
     showPullRequests: false,
     stackedThreads: false,
+    worktreeGroups: true,
   });
   expect(result.projects.map((project) => project.id)).toEqual([
     "proj_1",

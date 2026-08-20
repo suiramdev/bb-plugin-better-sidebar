@@ -6,7 +6,8 @@
  * in — pinned before roots, children under their parent, collapsed projects
  * contributing nothing — and that is worth testing without a DOM.
  */
-import type { ProjectGroup, ThreadNode } from "./grouping";
+import type { ProjectGroup } from "./grouping";
+import { groupedThreadIds } from "./worktrees";
 
 export interface Selection {
   /** Where the next shift-click measures from; null when nothing is picked. */
@@ -19,28 +20,27 @@ export const EMPTY_SELECTION: Selection = {
   ids: new Set<string>(),
 };
 
-function collect(nodes: readonly ThreadNode[], out: string[]): void {
-  for (const node of nodes) {
-    out.push(node.thread.id);
-    collect(node.children, out);
-  }
-}
-
 /**
  * The ids of the rows on screen, top to bottom.
  *
- * `isExpanded` is asked per project so a collapsed group drops out entirely:
- * a shift-click must not sweep up rows the user cannot see.
+ * `isExpanded` is asked per project and `isWorktreeExpanded` per worktree, so a
+ * collapsed group of either kind drops out entirely: a shift-click must not
+ * sweep up rows the user cannot see.
+ *
+ * Worktree grouping changes which rows are on screen, so the range has to be
+ * measured against the grouped list rather than the raw tree — otherwise a
+ * range drawn across a collapsed worktree would silently include its threads.
  */
 export function orderedThreadIds(
   groups: readonly ProjectGroup[],
   isExpanded: (projectId: string) => boolean,
+  isWorktreeExpanded: (environmentId: string) => boolean = () => true,
 ): string[] {
   const ids: string[] = [];
   for (const group of groups) {
     if (!isExpanded(group.projectId)) continue;
-    collect(group.pinned, ids);
-    collect(group.roots, ids);
+    ids.push(...groupedThreadIds(group.pinned, isWorktreeExpanded));
+    ids.push(...groupedThreadIds(group.roots, isWorktreeExpanded));
   }
   return ids;
 }

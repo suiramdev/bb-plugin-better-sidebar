@@ -44,10 +44,23 @@ export function threadTitle(thread: PluginSidebarThread): string {
   return title !== null && title.trim() !== "" ? title : "Untitled thread";
 }
 
-/** The one-line context under a title: the worktree branch, else the machine. */
-export function threadSubtitle(thread: PluginSidebarThread): string | null {
+/**
+ * The one-line context under a title: the worktree branch, else the machine.
+ *
+ * `omitBranch` is for a row sitting inside a worktree group. The header above it
+ * already names that branch, and repeating it on every row underneath is the
+ * group's own identity restated once per member — noise that crowds out the
+ * title it sits beside. Dropping it lets the machine name through instead,
+ * which is the one piece of context the header does not carry.
+ */
+export function threadSubtitle(
+  thread: PluginSidebarThread,
+  { omitBranch = false }: { omitBranch?: boolean } = {},
+): string | null {
   const branchName = thread.environment?.branchName ?? null;
-  if (branchName !== null && branchName !== "") return branchName;
+  if (!omitBranch && branchName !== null && branchName !== "") {
+    return branchName;
+  }
   return thread.host?.name ?? null;
 }
 
@@ -230,7 +243,7 @@ function groupRecency(group: ProjectGroup): number {
  * Ties and unknown metadata fall back to the project name, so the list has a
  * stable order even while the backend read is still in flight.
  */
-export function sortGroups(
+function sortGroups(
   groups: readonly ProjectGroup[],
   {
     sort,

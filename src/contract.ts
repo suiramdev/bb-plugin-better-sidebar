@@ -52,6 +52,7 @@ export const featureFlagsSchema = z.object({
   showBranch: z.boolean(),
   showPullRequests: z.boolean(),
   stackedThreads: z.boolean(),
+  worktreeGroups: z.boolean(),
 });
 export type FeatureFlags = z.infer<typeof featureFlagsSchema>;
 

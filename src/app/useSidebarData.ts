@@ -32,6 +32,7 @@ export const DEFAULT_FEATURES: FeatureFlags = {
   showBranch: true,
   showPullRequests: false,
   stackedThreads: false,
+  worktreeGroups: true,
 };
 
 /**

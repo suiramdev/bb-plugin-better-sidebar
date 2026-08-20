@@ -12,6 +12,7 @@ const FEATURES = {
   showBranch: true,
   showPullRequests: false,
   stackedThreads: false,
+  worktreeGroups: true,
 };
 
 const PROJECT_ORDER = [
@@ -848,4 +849,143 @@ test("Escape abandons a rename, and an empty name commits nothing", async () => 
       (call: { method: string }) => call.method === "rename",
     ),
   ).toEqual([]);
+});
+
+/** Two threads sharing one worktree, plus a loose one that shares nothing. */
+const WORKTREE_THREADS = {
+  threads: [
+    makeThread({
+      id: "thr_w1",
+      title: "Wire the parser",
+      projectId: "proj_1",
+      latestAttentionAt: 90,
+      environment: {
+        id: "env_w",
+        name: null,
+        branchName: "feat/parser",
+        workspaceDisplayKind: "managed-worktree",
+      },
+    }),
+    makeThread({
+      id: "thr_w2",
+      title: "Cover the parser",
+      projectId: "proj_1",
+      latestAttentionAt: 80,
+      environment: {
+        id: "env_w",
+        name: null,
+        branchName: "feat/parser",
+        workspaceDisplayKind: "managed-worktree",
+      },
+    }),
+    makeThread({
+      id: "thr_solo",
+      title: "Bump the deps",
+      projectId: "proj_1",
+      latestAttentionAt: 70,
+      environment: {
+        id: "env_solo",
+        name: null,
+        branchName: "chore/deps",
+        workspaceDisplayKind: "managed-worktree",
+      },
+    }),
+  ],
+  projects: [makeProject({ id: "proj_1", name: "bb" })],
+};
+
+test("threads sharing a worktree fold under one header, alone ones do not", async () => {
+  const slot = await mountList({}, { sidebarThreads: WORKTREE_THREADS });
+  await slot.findByText("Wire the parser");
+
+  // The worktree's branch names the group, and both its threads sit under it.
+  const header = slot.getByRole("button", { name: /Collapse feat\/parser/ });
+  expect(header).toBeTruthy();
+  // A thread alone in its worktree keeps its own row: a header over one thread
+  // would say nothing the row below it does not already say.
+  expect(slot.queryByRole("button", { name: /chore\/deps threads/ })).toBeNull();
+  expect(slot.getByText("Bump the deps")).toBeTruthy();
+
+  // The header counts what it holds and carries BB's worktree glyph.
+  const row = header.closest("div.bb-sidebar-hover-actions-row")!;
+  expect(row.textContent).toContain("2");
+  expect(row.querySelector('[data-icon="FolderGit"]')).toBeTruthy();
+});
+
+test("a worktree collapses, and stays collapsed on the next mount", async () => {
+  localStorage.clear();
+  const slot = await mountList({}, { sidebarThreads: WORKTREE_THREADS });
+  await slot.findByText("Wire the parser");
+
+  fireEvent.click(slot.getByRole("button", { name: /Collapse feat\/parser/ }));
+  await vi.waitFor(() =>
+    expect(slot.queryByText("Wire the parser")).toBeNull(),
+  );
+  // Folding a worktree hides its threads, not the rest of the project.
+  expect(slot.getByText("Bump the deps")).toBeTruthy();
+
+  mounted.pop()!.lifecycle.unmount();
+  const remounted = await mountList({}, { sidebarThreads: WORKTREE_THREADS });
+  await remounted.findByText("Bump the deps");
+  expect(remounted.queryByText("Wire the parser")).toBeNull();
+  localStorage.clear();
+});
+
+test("grouping is off when the feature is", async () => {
+  const slot = await mountList(
+    {},
+    {
+      sidebarThreads: WORKTREE_THREADS,
+      rpc: sidebarRpc({
+        sidebar: () => ({
+          features: { ...FEATURES, worktreeGroups: false },
+          preferences: { projectSort: "activity" },
+          projects: PROJECT_ORDER,
+          icons: {},
+        }),
+      }),
+    },
+  );
+  await slot.findByText("Wire the parser");
+  expect(slot.queryByRole("button", { name: /feat\/parser threads/ })).toBeNull();
+  expect(slot.getByText("Cover the parser")).toBeTruthy();
+});
+
+test("a stack keeps its own shape instead of being grouped by worktree", async () => {
+  // Both stacked threads share one worktree, so worktree grouping would claim
+  // them — but the stack already numbers them, and telling that story twice in
+  // two competing shapes is worse than either alone.
+  const slot = await mountList(
+    {},
+    {
+      sidebarThreads: STACK_THREADS,
+      rpc: sidebarRpc({
+        sidebar: () => ({
+          features: { ...FEATURES, stackedThreads: true, worktreeGroups: true },
+          preferences: { projectSort: "activity" },
+          projects: PROJECT_ORDER,
+          icons: {},
+        }),
+        stacks: () => ({ branches: STACK_BRANCHES }),
+      }),
+    },
+  );
+
+  await slot.findByLabelText("Hash passwords, 2nd in stack");
+  expect(slot.queryByRole("button", { name: /threads$/ })).toBeNull();
+  expect(slot.container.querySelector('[data-icon="FolderGit"]')).toBeNull();
+});
+
+test("a grouped row drops the branch its header already names", async () => {
+  const slot = await mountList({}, { sidebarThreads: WORKTREE_THREADS });
+  const grouped = await slot.findByText("Wire the parser");
+  const groupedRow = grouped.closest("div[style]")!;
+  // The header above says "feat/parser"; saying it again on every row under it
+  // is the group's own identity restated once per member.
+  expect(groupedRow.textContent).not.toContain("feat/parser");
+
+  // A thread that is not in a group still shows its branch — nothing above it
+  // carries that context.
+  const solo = slot.getByText("Bump the deps").closest("div[style]")!;
+  expect(solo.textContent).toContain("chore/deps");
 });

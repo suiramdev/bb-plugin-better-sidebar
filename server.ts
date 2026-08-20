@@ -54,6 +54,13 @@ export default async function plugin(bb: BbPluginApi) {
         "Group threads whose branches are based on one another as a stack (extra environment lookups)",
       default: false,
     },
+    worktreeGroups: {
+      type: "boolean",
+      label: "Group threads that share a worktree under the worktree",
+      // On, because it is what BB's own sidebar does and it costs nothing:
+      // the worktree is already on every thread the host hands us.
+      default: true,
+    },
   });
 
   const features = async (): Promise<FeatureFlags> => {
@@ -66,6 +73,7 @@ export default async function plugin(bb: BbPluginApi) {
       showBranch: values.showBranch,
       showPullRequests: values.showPullRequests,
       stackedThreads: values.stackedThreads,
+      worktreeGroups: values.worktreeGroups,
     };
   };
 

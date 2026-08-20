@@ -27,6 +27,8 @@ import { SidebarChildToggleChevron } from "./SidebarChildToggleChevron";
 import { SortMenu } from "./SortMenu";
 import { AddProjectButton } from "./AddProjectButton";
 import { ThreadRow } from "./ThreadRow";
+import { WorktreeRow } from "./WorktreeRow";
+import { groupWorktrees } from "./worktrees";
 import { stepMoveTarget } from "./manual-move";
 import { useSidebarData, useStackBranches } from "./useSidebarData";
 import { applyStacks, environmentIdsFor } from "./stacking";
@@ -45,6 +47,7 @@ import {
 } from "./sidebarRowClasses";
 
 const COLLAPSED_STORAGE_KEY = "better-sidebar.collapsed-projects";
+const COLLAPSED_WORKTREES_KEY = "better-sidebar.collapsed-worktrees";
 
 /**
  * The quiet group collapses like a project does, so it rides in the same
@@ -52,6 +55,18 @@ const COLLAPSED_STORAGE_KEY = "better-sidebar.collapsed-projects";
  * prefixed, and an `@` is not a character one can contain.
  */
 const QUIET_SECTION_KEY = "@quiet-projects";
+
+/**
+ * Everything the rows need to know about worktree grouping, as one value.
+ *
+ * `Branch` recurses, so each prop added to it is a prop written twice per
+ * level; bundling the concern keeps that recursion readable.
+ */
+interface WorktreeView {
+  enabled: boolean;
+  isCollapsed: (environmentId: string) => boolean;
+  toggle: (environmentId: string) => void;
+}
 
 /**
  * BB's own first-level group header, reproduced from `TopLevelSidebarSection`
@@ -80,9 +95,17 @@ const SECTION_HEADER_CLASS = cn(
 const SECTION_HEADER_LABEL_CLASS =
   "relative z-10 flex min-w-0 flex-1 items-center gap-1 text-left";
 
-function readCollapsed(): Set<string> {
+/**
+ * Collapse state, per concern.
+ *
+ * Projects and worktrees are collapsed independently and live under separate
+ * keys: a worktree id is only meaningful inside its project, and folding the
+ * two into one set would let a stale environment id from a deleted worktree sit
+ * in the projects' storage forever.
+ */
+function readCollapsed(storageKey: string): Set<string> {
   try {
-    const raw = localStorage.getItem(COLLAPSED_STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     const parsed: unknown = raw === null ? [] : JSON.parse(raw);
     return new Set(
       Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [],
@@ -92,13 +115,35 @@ function readCollapsed(): Set<string> {
   }
 }
 
-function writeCollapsed(collapsed: Set<string>): void {
+function writeCollapsed(storageKey: string, collapsed: Set<string>): void {
   try {
-    localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsed]));
+    localStorage.setItem(storageKey, JSON.stringify([...collapsed]));
   } catch {
     // Private mode or a full quota: collapse state is a nicety, not state we
     // are willing to fail a render over.
   }
+}
+
+/** One collapsible set, persisted under its own key. */
+function useCollapsed(
+  storageKey: string,
+): [Set<string>, (id: string) => void] {
+  const [collapsed, setCollapsed] = useState<Set<string>>(() =>
+    readCollapsed(storageKey),
+  );
+  const toggle = useCallback(
+    (id: string) => {
+      setCollapsed((current) => {
+        const next = new Set(current);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        writeCollapsed(storageKey, next);
+        return next;
+      });
+    },
+    [storageKey],
+  );
+  return [collapsed, toggle];
 }
 
 /**
@@ -130,20 +175,13 @@ export function ThreadList({
     addProject,
     deleteProject,
   } = useSidebarData(projectIds);
-  const [collapsed, setCollapsed] = useState<Set<string>>(readCollapsed);
+  const [collapsed, toggle] = useCollapsed(COLLAPSED_STORAGE_KEY);
+  const [collapsedWorktrees, toggleWorktree] = useCollapsed(
+    COLLAPSED_WORKTREES_KEY,
+  );
   const [editing, setEditing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
-
-  const toggle = useCallback((projectId: string) => {
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (next.has(projectId)) next.delete(projectId);
-      else next.add(projectId);
-      writeCollapsed(next);
-      return next;
-    });
-  }, []);
 
   const baseGroups = useMemo(
     () =>
@@ -233,15 +271,31 @@ export function ThreadList({
   // A search shows what it found, whatever the user collapsed.
   const isQuietCollapsed = !isSearching && collapsed.has(QUIET_SECTION_KEY);
 
+  // One object rather than three props drilled through a recursive component.
+  // A search is the one thing that overrides a collapse: it answers a question,
+  // and a folded worktree would hide the answer.
+  const worktrees: WorktreeView = useMemo(
+    () => ({
+      enabled: features.worktreeGroups,
+      isCollapsed: (environmentId: string) =>
+        !isSearching && collapsedWorktrees.has(environmentId),
+      toggle: toggleWorktree,
+    }),
+    [features.worktreeGroups, isSearching, collapsedWorktrees, toggleWorktree],
+  );
+
   // The rows actually on screen, top to bottom: what a shift-click range is
-  // measured against, so it can never sweep up a row inside a closed project.
+  // measured against, so it can never sweep up a row inside a closed project
+  // or a folded worktree.
   const visibleThreadIds = useMemo(
     () =>
       orderedThreadIds(
         [...active, ...(isQuietCollapsed ? [] : quiet)],
         (projectId) => !(!isSearching && collapsed.has(projectId)),
+        (environmentId) =>
+          !worktrees.enabled || !worktrees.isCollapsed(environmentId),
       ),
-    [active, quiet, isQuietCollapsed, isSearching, collapsed],
+    [active, quiet, isQuietCollapsed, isSearching, collapsed, worktrees],
   );
 
   const renderSection = (group: ProjectGroup, isQuiet: boolean) => (
@@ -261,6 +315,7 @@ export function ThreadList({
       showBranch={features.showBranch}
       showPullRequests={features.showPullRequests}
       onNavigate={onNavigate}
+      worktrees={worktrees}
       isManual={isManual}
       isDragging={dragging === group.projectId}
       canStepUp={isManual && orderedProjectIds.indexOf(group.projectId) > 0}
@@ -442,6 +497,7 @@ function ProjectSection({
   showBranch,
   showPullRequests,
   onNavigate,
+  worktrees,
   isManual,
   isDragging,
   canStepUp,
@@ -465,6 +521,7 @@ function ProjectSection({
   showBranch: boolean;
   showPullRequests: boolean;
   onNavigate: () => void;
+  worktrees: WorktreeView;
   /** True while the list follows BB's manual project order. */
   isManual: boolean;
   isDragging: boolean;
@@ -674,6 +731,7 @@ function ProjectSection({
               showBranch={showBranch}
               showPullRequests={showPullRequests}
               onNavigate={onNavigate}
+              worktrees={worktrees}
               label="Pinned"
               // Pinned threads are their own group inside the project, so the
               // gap under them is the one that says where they stop.
@@ -686,6 +744,7 @@ function ProjectSection({
             showBranch={showBranch}
             showPullRequests={showPullRequests}
             onNavigate={onNavigate}
+            worktrees={worktrees}
           />
         </div>
       )}
@@ -693,13 +752,20 @@ function ProjectSection({
   );
 }
 
-/** One list of rows and, recursively, their children. */
+/**
+ * One list of rows and, recursively, their children.
+ *
+ * Grouping is applied here rather than baked into the tree, so it happens at
+ * every sibling level for free: each `Branch` groups the list it was handed,
+ * and the nested `Branch` inside a row groups that row's children.
+ */
 function Branch({
   nodes,
   activeThreadId,
   showBranch,
   showPullRequests,
   onNavigate,
+  worktrees,
   label,
   depth = 0,
   className,
@@ -709,11 +775,43 @@ function Branch({
   showBranch: boolean;
   showPullRequests: boolean;
   onNavigate: () => void;
+  worktrees: WorktreeView;
   label?: string;
   depth?: number;
   className?: string;
 }) {
   if (nodes.length === 0) return null;
+  const items = worktrees.enabled
+    ? groupWorktrees(nodes)
+    : nodes.map((node) => ({ kind: "thread" as const, node }));
+
+  const renderNode = (
+    node: ThreadNode,
+    rowDepth: number,
+    inWorktreeGroup = false,
+  ) => (
+    <ThreadRow
+      key={node.thread.id}
+      node={node}
+      depth={rowDepth}
+      isActive={node.thread.id === activeThreadId}
+      showBranch={showBranch}
+      inWorktreeGroup={inWorktreeGroup}
+      showPullRequests={showPullRequests}
+      onNavigate={onNavigate}
+    >
+      <Branch
+        nodes={node.children}
+        activeThreadId={activeThreadId}
+        showBranch={showBranch}
+        showPullRequests={showPullRequests}
+        onNavigate={onNavigate}
+        worktrees={worktrees}
+        depth={rowDepth + 1}
+      />
+    </ThreadRow>
+  );
+
   return (
     <ul
       {...(label === undefined ? {} : { "aria-label": label })}
@@ -721,26 +819,27 @@ function Branch({
       // two hover fills touch.
       className={cn("space-y-0.5", className)}
     >
-      {nodes.map((node) => (
-        <ThreadRow
-          key={node.thread.id}
-          node={node}
-          depth={depth}
-          isActive={node.thread.id === activeThreadId}
-          showBranch={showBranch}
-          showPullRequests={showPullRequests}
-          onNavigate={onNavigate}
-        >
-          <Branch
-            nodes={node.children}
-            activeThreadId={activeThreadId}
-            showBranch={showBranch}
-            showPullRequests={showPullRequests}
-            onNavigate={onNavigate}
-            depth={depth + 1}
-          />
-        </ThreadRow>
-      ))}
+      {items.map((item) =>
+        item.kind === "thread" ? (
+          renderNode(item.node, depth)
+        ) : (
+          <WorktreeRow
+            key={item.group.environmentId}
+            group={item.group}
+            depth={depth}
+            isCollapsed={worktrees.isCollapsed(item.group.environmentId)}
+            onToggle={() => worktrees.toggle(item.group.environmentId)}
+          >
+            {/* The worktree header owns a level, so its threads sit one step
+              in — the same step a child thread takes under its parent. */}
+            <ul className="space-y-0.5">
+              {item.group.nodes.map((node) =>
+                renderNode(node, depth + 1, true),
+              )}
+            </ul>
+          </WorktreeRow>
+        ),
+      )}
     </ul>
   );
 }

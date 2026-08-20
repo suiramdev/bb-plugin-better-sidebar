@@ -71,6 +71,7 @@ export function ThreadRow({
   depth,
   isActive,
   showBranch,
+  inWorktreeGroup = false,
   showPullRequests,
   onNavigate,
   children,
@@ -79,6 +80,8 @@ export function ThreadRow({
   depth: number;
   isActive: boolean;
   showBranch: boolean;
+  /** True when a worktree header above already names this row's branch. */
+  inWorktreeGroup?: boolean;
   showPullRequests: boolean;
   onNavigate: () => void;
   children?: ReactNode;
@@ -90,7 +93,9 @@ export function ThreadRow({
   const [isRenaming, setIsRenaming] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const title = threadTitle(node.thread);
-  const subtitle = showBranch ? threadSubtitle(node.thread) : null;
+  const subtitle = showBranch
+    ? threadSubtitle(node.thread, { omitBranch: inWorktreeGroup })
+    : null;
 
   return (
     <RowContextMenu thread={node.thread} onRename={() => setIsRenaming(true)}>

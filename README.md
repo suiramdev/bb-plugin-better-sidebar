@@ -7,6 +7,9 @@ tab.
 - **Threads grouped by project.** Collapsible project sections, pinned threads
   first, child threads nested under their parent, and BB's own status glyphs on
   each row.
+- **Threads that share a worktree fold under it.** BB's own worktree grouping,
+  with its icon and its rules — and it composes with stacks rather than fighting
+  them.
 - **Looks like BB, because it is BB's own design.** The rows, project headers,
   menus, spacing, and states are built from the same class vocabulary the
   built-in sidebar uses, so the list reads as part of the app rather than as a
@@ -80,6 +83,31 @@ personal project stays put, because BB keeps it outside that order.
 Threads inside a group read by that same signal, newest first, with pinned
 threads above; only the project order is configurable.
 
+## Worktrees
+
+Sibling threads sitting in the same worktree fold under one header naming it —
+BB's own sidebar behaviour, with its `FolderGit` glyph and its rules:
+
+```text
+▾ feat/parser              2   ← the worktree, and what it holds
+    Wire the parser
+    Cover the parser
+  Bump the deps       chore/deps  ← alone in its worktree, so a plain row
+```
+
+**Two threads or it is not a group.** A lone thread in its own worktree is
+already legible as itself; a header over it would add a row to say nothing.
+Only real worktrees group, so threads running in the project checkout itself
+stay where they are instead of collapsing into one meaningless pile.
+
+**A group sits where its first thread sat**, so whichever sort you chose still
+decides the order — the group inherits the place of the most relevant thread in
+it. Grouping applies at every level, so a parent thread's children group too.
+
+**A grouped row drops its branch label**, because the header above already says
+it; the machine name shows through instead, which is the one piece of context
+the header does not carry.
+
 ## Stacked threads
 
 Off by default. When on, threads whose branches are cut from one another are
@@ -106,6 +134,14 @@ one parent and four numbered rows, and a stack that forks flattens depth-first,
 so the numbers follow the based-on chain. Threads sharing a branch share its
 number. Threads that are not in a stack keep the nesting they always had.
 
+**A stack wins over worktree grouping.** With both on, a thread already inside a
+stack is left to it: the stack numbers that thread by the branch it sits on and
+already gives threads sharing a worktree the same number, so folding them under
+a worktree header as well would tell one story twice, in two shapes that
+disagree about which is the row's real parent. Everything the stack does not
+claim groups by worktree as usual, so the two features compose instead of
+competing.
+
 ## Settings
 
 Each visual feature is a toggle on the plugin's settings page:
@@ -117,6 +153,8 @@ Each visual feature is a toggle on the plugin's settings page:
   costs a git-host lookup.
 - **Group threads whose branches are based on one another as a stack** — off by
   default, because each environment on screen costs a lookup. See below.
+- **Group threads that share a worktree under the worktree** — on by default.
+  It costs nothing: the worktree is already on every thread BB hands a plugin.
 
 Settings apply live; there is no reload to run.
 
@@ -175,6 +213,7 @@ Layout: `server.ts` and `app.tsx` are wiring. The rules live in `src/` —
 `git-remote.ts` and `icon-sources.ts` decide where to look, `resolve-icon.ts`
 does the fetching, `icon-service.ts` holds the caching and freshness rules,
 `src/app/grouping.ts` is the list's grouping, sorting, and search,
+`src/app/worktrees.ts` folds sibling threads sharing a worktree,
 `src/reorder.ts` turns a drop into BB's neighbour-based move, and
 `src/app/favicon.ts` owns the tab icon.
 
