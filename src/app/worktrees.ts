@@ -31,6 +31,12 @@ export interface WorktreeGroup {
   environmentId: string;
   /** The worktree's name, else its branch, else "Worktree". */
   name: string;
+  /** The project its threads belong to, for opening a new thread in it. */
+  projectId: string;
+  /** The environment's own name, or null when it only has a branch. */
+  environmentName: string | null;
+  /** The branch a cleared name falls back to showing. */
+  branchName: string | null;
   /** At least two, in the order they were given. */
   nodes: ThreadNode[];
   /**
@@ -140,6 +146,12 @@ export function groupWorktrees(nodes: readonly ThreadNode[]): ThreadItem[] {
       group: {
         environmentId: bucketKey.environmentId,
         name: worktreeName(node.thread),
+        projectId: node.thread.projectId,
+        // The environment's own two fields, kept apart from the display name
+        // the header shows: renaming needs to know whether there is a name to
+        // clear, and what branch clearing it would fall back to.
+        environmentName: node.thread.environment?.name ?? null,
+        branchName: node.thread.environment?.branchName ?? null,
         // The header now carries the stack number, so the rows under it stop
         // repeating it — one statement, in one place.
         nodes: bucket.map((member) => ({ ...member, stackPosition: null })),

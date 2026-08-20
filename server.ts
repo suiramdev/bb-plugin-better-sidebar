@@ -178,6 +178,21 @@ export default async function plugin(bb: BbPluginApi) {
         branches: Object.fromEntries(entries.filter((entry) => entry !== null)),
       };
     },
+    archiveWorktree: async ({ environmentId }) => {
+      const { archivedThreadIds } = await bb.sdk.environments.archiveThreads({
+        environmentId,
+      });
+      return { archivedThreadIds };
+    },
+    renameWorktree: async ({ environmentId, name }) => {
+      // Null clears the name, which is how the environment falls back to
+      // showing its branch again.
+      const environment = await bb.sdk.environments.update({
+        environmentId,
+        name,
+      });
+      return { name: environment.name ?? null };
+    },
     favicon: async ({ projectId }) => {
       const { tabFavicon } = await features();
       if (!tabFavicon) return { enabled: false, dataUrl: null };

@@ -28,7 +28,8 @@ import { SortMenu } from "./SortMenu";
 import { AddProjectButton } from "./AddProjectButton";
 import { ThreadRow } from "./ThreadRow";
 import { WorktreeRow } from "./WorktreeRow";
-import { groupWorktrees } from "./worktrees";
+import { groupWorktrees, type WorktreeGroup } from "./worktrees";
+import { EnvironmentRenameDialog } from "./EnvironmentRenameDialog.js";
 import { ordinal } from "./ordinal";
 import { stepMoveTarget } from "./manual-move";
 import { useSidebarData, useStackBranches } from "./useSidebarData";
@@ -60,6 +61,12 @@ interface WorktreeView {
   enabled: boolean;
   isCollapsed: (environmentId: string) => boolean;
   toggle: (environmentId: string) => void;
+  /** BB's three worktree actions, bound to the group the header stands for. */
+  onCreateNewThread: (group: WorktreeGroup) => void;
+  onRename: (group: WorktreeGroup) => void;
+  onArchive: (group: WorktreeGroup) => void;
+  /** The worktree whose archive is in flight, so its item can disable. */
+  archivingId: string | null;
 }
 
 /**
@@ -167,7 +174,10 @@ export function ThreadList({
     moveProject,
     addProject,
     deleteProject,
+    archiveWorktree,
+    renameWorktree,
   } = useSidebarData(projectIds);
+  const actions = useSidebarThreadActions();
   const [collapsed, toggle] = useCollapsed(COLLAPSED_STORAGE_KEY);
   const [collapsedWorktrees, toggleWorktree] = useCollapsed(
     COLLAPSED_WORKTREES_KEY,
@@ -175,6 +185,16 @@ export function ThreadList({
   const [editing, setEditing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [renamingWorktree, setRenamingWorktree] = useState<WorktreeGroup | null>(
+    null,
+  );
+  const [archivingWorktreeId, setArchivingWorktreeId] = useState<string | null>(
+    null,
+  );
+  const [renameWorktreeError, setRenameWorktreeError] = useState<string | null>(
+    null,
+  );
+  const [renameWorktreePending, setRenameWorktreePending] = useState(false);
 
   const baseGroups = useMemo(
     () =>
@@ -271,8 +291,39 @@ export function ThreadList({
       isCollapsed: (environmentId: string) =>
         !isSearching && collapsedWorktrees.has(environmentId),
       toggle: toggleWorktree,
+      onCreateNewThread: (group: WorktreeGroup) => {
+        // The SDK's composer targets a project, not an environment, so this
+        // opens the new-thread screen on the worktree's project rather than
+        // silently promising a placement it cannot make.
+        actions.openNewThread({ projectId: group.projectId });
+        onNavigate();
+      },
+      onRename: (group: WorktreeGroup) => setRenamingWorktree(group),
+      onArchive: (group: WorktreeGroup) => {
+        setArchivingWorktreeId(group.environmentId);
+        void archiveWorktree(group.environmentId)
+          .then((archivedThreadIds) => {
+            toast.success(
+              archivedThreadIds.length === 1
+                ? `Archived 1 thread in ${group.name}.`
+                : `Archived ${archivedThreadIds.length} threads in ${group.name}.`,
+            );
+          })
+          .catch(() => toast.error(`Could not archive ${group.name}.`))
+          .finally(() => setArchivingWorktreeId(null));
+      },
+      archivingId: archivingWorktreeId,
     }),
-    [features.worktreeGroups, isSearching, collapsedWorktrees, toggleWorktree],
+    [
+      features.worktreeGroups,
+      isSearching,
+      collapsedWorktrees,
+      toggleWorktree,
+      actions,
+      onNavigate,
+      archiveWorktree,
+      archivingWorktreeId,
+    ],
   );
 
   // The rows actually on screen, top to bottom: what a shift-click range is
@@ -437,6 +488,49 @@ export function ThreadList({
               )}
             </DialogContent>
           </Dialog>
+
+          {/*
+            BB's own environment rename dialog, so a worktree is renamed the
+            way the host renames it: the branch as the placeholder, an
+            80-character cap, and a "Use branch name" button that clears the
+            name back to the branch when there is one to clear.
+          */}
+          <EnvironmentRenameDialog
+            target={
+              renamingWorktree === null
+                ? null
+                : {
+                    id: renamingWorktree.environmentId,
+                    currentName: renamingWorktree.environmentName ?? "",
+                    canClearName: renamingWorktree.environmentName !== null,
+                    ...(renamingWorktree.branchName !== null
+                      ? { branchName: renamingWorktree.branchName }
+                      : {}),
+                  }
+            }
+            pending={renameWorktreePending}
+            errorMessage={renameWorktreeError}
+            onOpenChange={(open) => {
+              if (open) return;
+              setRenamingWorktree(null);
+              setRenameWorktreeError(null);
+            }}
+            onRename={(environmentId, name) => {
+              setRenameWorktreePending(true);
+              setRenameWorktreeError(null);
+              void renameWorktree(environmentId, name)
+                .then(() => {
+                  setRenamingWorktree(null);
+                  // The name lives on the environment, which reaches this list
+                  // through the host's thread payload rather than through the
+                  // plugin's own state, so there is nothing local to update.
+                })
+                .catch(() =>
+                  setRenameWorktreeError("Failed to update environment."),
+                )
+                .finally(() => setRenameWorktreePending(false));
+            }}
+          />
         </div>
       </ThreadSelectionProvider>
     </TooltipProvider>
@@ -778,6 +872,12 @@ function Branch({
             parentLineDepth={depth > 0 ? depth - 1 : null}
             isCollapsed={worktrees.isCollapsed(item.group.environmentId)}
             onToggle={() => worktrees.toggle(item.group.environmentId)}
+            onCreateNewThread={() => worktrees.onCreateNewThread(item.group)}
+            onRenameWorktree={() => worktrees.onRename(item.group)}
+            onArchiveThreads={() => worktrees.onArchive(item.group)}
+            archiveThreadsPending={
+              worktrees.archivingId === item.group.environmentId
+            }
           >
             {/* The worktree header owns a level, so its threads sit one step
               in — the same step a child thread takes under its parent.

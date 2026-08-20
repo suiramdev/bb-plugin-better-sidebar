@@ -943,6 +943,42 @@ test("threads sharing a worktree fold under one header, alone ones do not", asyn
   expect(row.textContent).toBe("feat/parser");
 });
 
+test("a worktree header offers BB's three actions", async () => {
+  const slot = await mountList({}, { sidebarThreads: WORKTREE_THREADS });
+  await slot.findByText("Wire the parser");
+
+  // Radix opens on pointerdown, not click.
+  fireEvent.pointerDown(
+    slot.getAllByRole("button", { name: "Worktree actions" })[0]!,
+    { button: 0, ctrlKey: false },
+  );
+
+  // BB's set, in BB's order. "New thread" was missing entirely before the
+  // header was rebuilt from the host's own component.
+  for (const name of ["New thread", "Rename", "Archive worktree"]) {
+    expect(await slot.findByRole("menuitem", { name })).toBeTruthy();
+  }
+});
+
+test("archiving a worktree settles the whole environment in one host call", async () => {
+  const slot = await mountList({}, { sidebarThreads: WORKTREE_THREADS });
+  await slot.findByText("Wire the parser");
+
+  fireEvent.pointerDown(
+    slot.getAllByRole("button", { name: "Worktree actions" })[0]!,
+    { button: 0, ctrlKey: false },
+  );
+  fireEvent.click(await slot.findByRole("menuitem", { name: "Archive worktree" }));
+
+  // One environment call, not a loop of per-thread archives: the host owns the
+  // transaction and reports which threads it actually took.
+  await vi.waitFor(() => {
+    expect(slot.inspection.rpcCalls).toContainEqual(
+      expect.objectContaining({ method: "archiveWorktree" }),
+    );
+  });
+});
+
 test("a worktree collapses, and stays collapsed on the next mount", async () => {
   localStorage.clear();
   const slot = await mountList({}, { sidebarThreads: WORKTREE_THREADS });

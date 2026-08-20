@@ -93,6 +93,17 @@ export interface SidebarData {
   addProject: () => Promise<string | null>;
   /** Removes a project from BB, threads and all. There is no undo. */
   deleteProject: (projectId: string) => Promise<void>;
+  /**
+   * Archives every thread in a worktree and resolves to the ones the host
+   * actually took, so the caller can report the count and notice whether the
+   * thread on screen was among them.
+   */
+  archiveWorktree: (environmentId: string) => Promise<string[]>;
+  /** Renames a worktree, or clears the name back to its branch with null. */
+  renameWorktree: (
+    environmentId: string,
+    name: string | null,
+  ) => Promise<void>;
 }
 
 export function useSidebarData(projectIds: readonly string[]): SidebarData {
@@ -189,6 +200,23 @@ export function useSidebarData(projectIds: readonly string[]): SidebarData {
     [load, rpc],
   );
 
+  const archiveWorktree = useCallback(
+    async (environmentId: string) => {
+      const result = await rpc.call("archiveWorktree", { environmentId });
+      // The archived threads leave the host's own list, which this hook does
+      // not own, so there is nothing local to reconcile.
+      return result.archivedThreadIds;
+    },
+    [rpc],
+  );
+
+  const renameWorktree = useCallback(
+    async (environmentId: string, name: string | null) => {
+      await rpc.call("renameWorktree", { environmentId, name });
+    },
+    [rpc],
+  );
+
   return {
     features,
     preferences,
@@ -199,5 +227,7 @@ export function useSidebarData(projectIds: readonly string[]): SidebarData {
     moveProject,
     addProject,
     deleteProject,
+    archiveWorktree,
+    renameWorktree,
   };
 }

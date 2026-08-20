@@ -169,4 +169,32 @@ export const rpcContract = defineRpcContract({
       branches: z.record(z.string(), environmentBranchSchema),
     }),
   },
+  /**
+   * Archive every thread in one worktree, the way BB's own worktree header
+   * does it.
+   *
+   * A dedicated host call rather than a loop of thread archives on the client:
+   * the host settles the whole environment in one transaction and reports back
+   * exactly which threads it took, which is what lets the toast name the count
+   * and the caller notice when the open thread was one of them.
+   */
+  archiveWorktree: {
+    input: z.object({ environmentId: z.string().min(1) }).strict(),
+    output: z.object({ archivedThreadIds: z.array(z.string()) }),
+  },
+  /**
+   * Rename a worktree, or clear its name back to its branch with null.
+   *
+   * The name belongs to the environment, not to any thread in it, so this is
+   * an environment write and not a thread rename.
+   */
+  renameWorktree: {
+    input: z
+      .object({
+        environmentId: z.string().min(1),
+        name: z.string().max(80).nullable(),
+      })
+      .strict(),
+    output: z.object({ name: z.string().nullable() }),
+  },
 });
