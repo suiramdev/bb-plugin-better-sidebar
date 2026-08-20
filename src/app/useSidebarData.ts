@@ -100,10 +100,7 @@ export interface SidebarData {
    */
   archiveWorktree: (environmentId: string) => Promise<string[]>;
   /** Renames a worktree, or clears the name back to its branch with null. */
-  renameWorktree: (
-    environmentId: string,
-    name: string | null,
-  ) => Promise<void>;
+  renameWorktree: (environmentId: string, name: string | null) => Promise<void>;
 }
 
 export function useSidebarData(projectIds: readonly string[]): SidebarData {

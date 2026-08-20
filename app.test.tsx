@@ -968,7 +968,9 @@ test("archiving a worktree settles the whole environment in one host call", asyn
     slot.getAllByRole("button", { name: "Worktree actions" })[0]!,
     { button: 0, ctrlKey: false },
   );
-  fireEvent.click(await slot.findByRole("menuitem", { name: "Archive worktree" }));
+  fireEvent.click(
+    await slot.findByRole("menuitem", { name: "Archive worktree" }),
+  );
 
   // One environment call, not a loop of per-thread archives: the host owns the
   // transaction and reports which threads it actually took.

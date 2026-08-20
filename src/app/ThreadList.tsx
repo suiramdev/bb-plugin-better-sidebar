@@ -185,9 +185,8 @@ export function ThreadList({
   const [editing, setEditing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
-  const [renamingWorktree, setRenamingWorktree] = useState<WorktreeGroup | null>(
-    null,
-  );
+  const [renamingWorktree, setRenamingWorktree] =
+    useState<WorktreeGroup | null>(null);
   const [archivingWorktreeId, setArchivingWorktreeId] = useState<string | null>(
     null,
   );
