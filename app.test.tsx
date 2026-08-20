@@ -185,10 +185,12 @@ test("threads are grouped under their project, children nested", async () => {
   expect(slot.getByText("billing")).toBeTruthy();
   const child = await slot.findByText("Investigate the retry");
   const root = slot.getByText("Fix the flaky test");
-  // The child row is indented relative to its parent row.
+  // The child row is indented relative to its parent row. BB indents a thread
+  // row with padding rather than a margin, so the row's own hover fill and
+  // focus ring still run to the sidebar's edge at every depth.
   const indentOf = (element: HTMLElement): number =>
     Number(
-      /margin-left:\s*(\d+)px/.exec(
+      /padding-left:\s*(\d+)px/.exec(
         element.closest("[style]")?.getAttribute("style") ?? "",
       )?.[1] ?? 0,
     );
@@ -367,12 +369,29 @@ test("the chosen sort mode orders the project groups", async () => {
   expect(headerNames(oldest)[0]).toContain("billing");
 });
 
-function headerNames(slot: {
-  getAllByRole: (role: string, options?: object) => HTMLElement[];
-}): string[] {
-  return slot
-    .getAllByRole("button", { expanded: true })
-    .map((button) => button.textContent ?? "");
+/**
+ * The project headers, top to bottom.
+ *
+ * A group header is a row, not a button: BB gives the caret the keyboard focus
+ * and leaves the row itself a plain (aria-hidden) click target, so the name is
+ * read off the labelled `<section>` rather than off a button's text.
+ */
+function headerNames(slot: { container: HTMLElement }): string[] {
+  return [...slot.container.querySelectorAll("section[aria-label]")].map(
+    (section) => section.getAttribute("aria-label") ?? "",
+  );
+}
+
+/** The draggable header row for a project, found by the section's label. */
+function headerRow(
+  slot: { container: HTMLElement },
+  name: string,
+): HTMLElement {
+  const header = slot.container.querySelector(
+    `section[aria-label="${name}"] [draggable]`,
+  );
+  if (header === null) throw new Error(`no header row for ${name}`);
+  return header as HTMLElement;
 }
 
 test("manual mode makes project headers draggable and moves them on drop", async () => {
@@ -389,16 +408,17 @@ test("manual mode makes project headers draggable and moves them on drop", async
       }),
     },
   );
-  const headers = await slot.findAllByRole("button", { expanded: true });
-  const [bb, billing] = headers;
-  expect(bb!.getAttribute("draggable")).toBe("true");
-  stubBounds(bb!);
+  await slot.findByText("bb");
+  const bb = headerRow(slot, "bb");
+  const billing = headerRow(slot, "billing");
+  expect(bb.getAttribute("draggable")).toBe("true");
+  stubBounds(bb);
 
   // Drop "billing" on the top half of "bb": it lands immediately before it.
   const dataTransfer = fakeDataTransfer();
-  fireDrag(billing!, "dragstart", { dataTransfer });
-  fireDrag(bb!, "dragover", { dataTransfer, clientY: 104 });
-  fireDrag(bb!, "drop", { dataTransfer, clientY: 104 });
+  fireDrag(billing, "dragstart", { dataTransfer });
+  fireDrag(bb, "dragover", { dataTransfer, clientY: 104 });
+  fireDrag(bb, "drop", { dataTransfer, clientY: 104 });
 
   await vi.waitFor(() =>
     expect(slot.inspection.rpcCalls).toContainEqual(
@@ -424,7 +444,10 @@ test("dropping below the last header sends a project to the end", async () => {
       }),
     },
   );
-  const headers = await slot.findAllByRole("button", { expanded: true });
+  await slot.findByText("bb");
+  const headers = [...slot.container.querySelectorAll("section[aria-label]")]
+    .map((section) => section.querySelector("[draggable]"))
+    .filter((header): header is HTMLElement => header !== null);
   const last = headers[headers.length - 1]!;
   stubBounds(last);
 
@@ -444,8 +467,8 @@ test("dropping below the last header sends a project to the end", async () => {
 
 test("a project is not draggable outside manual mode", async () => {
   const slot = await mountList();
-  const headers = await slot.findAllByRole("button", { expanded: true });
-  expect(headers[0]!.getAttribute("draggable")).toBe("false");
+  await slot.findByText("bb");
+  expect(headerRow(slot, "bb").getAttribute("draggable")).toBe("false");
 });
 
 /** The same fixture plus "docs", a project nobody has started a thread in. */
@@ -482,10 +505,14 @@ test("the quiet group collapses, and stays collapsed on the next mount", async (
   const slot = await mountList({}, { sidebarThreads: WITH_QUIET_PROJECT });
   await slot.findByLabelText("docs");
 
-  // It counts what it hides, so a collapsed group is not a mystery.
+  // The caret is the control, exactly as it is on a project header: it owns
+  // aria-expanded and the keyboard focus, and it is not the whole row.
   const toggle = slot.getByRole("button", { name: /No threads yet/ });
   expect(toggle.getAttribute("aria-expanded")).toBe("true");
-  expect(toggle.textContent).toContain("1");
+  // It counts what it hides, so a collapsed group is not a mystery. The count
+  // sits on the header row beside the caret, not inside it.
+  const header = toggle.closest("div");
+  expect(header?.textContent).toContain("1");
 
   fireEvent.click(toggle);
   await vi.waitFor(() => expect(slot.queryByLabelText("docs")).toBeNull());
@@ -731,9 +758,10 @@ test("a stack reads as an ordered list nested one layer under its parent", async
   ];
   const indents = rows.map((label) => {
     const row = slot.getByLabelText(label).closest("div[style]");
-    return (row as HTMLElement).style.marginLeft;
+    return (row as HTMLElement).style.paddingLeft;
   });
-  expect(new Set(indents)).toEqual(new Set(["14px"]));
+  // BB's own step: an 8px base plus 24px per level of depth.
+  expect(new Set(indents)).toEqual(new Set(["32px"]));
 });
 
 test("only the environments on screen are asked about, once each", async () => {

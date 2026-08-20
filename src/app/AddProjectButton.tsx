@@ -38,10 +38,10 @@ export function AddProjectButton({
       className={cn(
         "flex size-7 shrink-0 items-center justify-center rounded-md",
         "max-md:pointer-coarse:size-9",
-        "text-muted-foreground outline-none",
+        "text-subtle-foreground/75 outline-none ring-sidebar-ring",
         CONTROL_HOVER_TRANSITION,
-        "hover:bg-sidebar-accent hover:text-foreground",
-        "focus-visible:ring-1 focus-visible:ring-ring",
+        "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        "focus-visible:ring-2",
         "disabled:pointer-events-none disabled:opacity-50",
       )}
       aria-label="Add a project"
@@ -52,7 +52,7 @@ export function AddProjectButton({
         // The disabled state is already a static cue; the spin is only there to
         // say the folder picker is the host's, not a frozen button.
         className={cn(
-          "size-3.5 shrink-0",
+          "size-4 shrink-0 max-md:pointer-coarse:size-5",
           isAdding && "motion-safe:animate-spin",
         )}
       />

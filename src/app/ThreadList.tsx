@@ -23,6 +23,7 @@ import {
   ProjectContextMenu,
 } from "./ProjectMenu";
 import { ProjectIcon } from "./ProjectIcon";
+import { SidebarChildToggleChevron } from "./SidebarChildToggleChevron";
 import { SortMenu } from "./SortMenu";
 import { AddProjectButton } from "./AddProjectButton";
 import { ThreadRow } from "./ThreadRow";
@@ -31,6 +32,17 @@ import { useSidebarData, useStackBranches } from "./useSidebarData";
 import { applyStacks, environmentIdsFor } from "./stacking";
 import { orderedThreadIds } from "./selection";
 import { ThreadSelectionProvider } from "./SelectionContext";
+import {
+  CHROME_SECTION_LABEL_CLASS,
+  SIDEBAR_HOVER_ACTIONS_CLASS,
+  SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
+  SIDEBAR_HOVER_ACTIONS_GAP_CLASS,
+  SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
+} from "./sidebarHoverActions";
+import {
+  SIDEBAR_LEADING_GLYPH_SLOT_CLASS,
+  SIDEBAR_STANDARD_ROW_PADDING_CLASS,
+} from "./sidebarRowClasses";
 
 const COLLAPSED_STORAGE_KEY = "better-sidebar.collapsed-projects";
 
@@ -42,16 +54,31 @@ const COLLAPSED_STORAGE_KEY = "better-sidebar.collapsed-projects";
 const QUIET_SECTION_KEY = "@quiet-projects";
 
 /**
- * The height floor shared by every header-sized control in this list, borrowed
- * from the host so a coarse pointer grows these rows exactly as far as it grows
- * BB's own. A 10px uppercase label inside `py-1` is 22px, under the 24px WCAG
- * 2.5.8 target, and no amount of padding tuning would have tracked the host.
+ * BB's own first-level group header, reproduced from `TopLevelSidebarSection`
+ * and the label tier of `SidebarStickyTier` it renders into.
+ *
+ * The parts that matter, and why each is here rather than something simpler:
+ * `bg-sidebar` keeps a header opaque so rows scrolling under a pinned one never
+ * show through; the ring pair is the host's focus treatment; the `[&>svg]`
+ * rules give any glyph dropped in the row a uniform box; and
+ * `CHROME_SECTION_LABEL_CLASS` is what makes a project name read as chrome —
+ * 12px, normal weight, subtle foreground diluted once more — instead of the
+ * 10px bold uppercase this list used to shout it in, which matched nothing else
+ * in the sidebar.
  */
-const HEADER_HEIGHT =
-  "min-h-[var(--bb-sidebar-row-height,1.5rem)] max-md:pointer-coarse:min-h-[var(--bb-sidebar-row-height-coarse,2.25rem)]";
+const SECTION_HEADER_CLASS = cn(
+  SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
+  "relative flex min-h-6 w-full shrink-0 items-center rounded-md bg-sidebar",
+  "outline-none ring-sidebar-ring focus-visible:ring-2",
+  "[&>svg]:size-4 [&>svg]:shrink-0",
+  CHROME_SECTION_LABEL_CLASS,
+  SIDEBAR_STANDARD_ROW_PADDING_CLASS,
+  "pr-0 transition-colors",
+);
 
-/** The ring the sort and add controls above the list already use. */
-const FOCUS_RING = "outline-none focus-visible:ring-1 focus-visible:ring-ring";
+/** The label + caret cluster that owns the left half of a group header. */
+const SECTION_HEADER_LABEL_CLASS =
+  "relative z-10 flex min-w-0 flex-1 items-center gap-1 text-left";
 
 function readCollapsed(): Set<string> {
   try {
@@ -270,7 +297,7 @@ export function ThreadList({
               <p className="text-xs font-medium text-foreground">
                 Unable to load threads
               </p>
-              <p className="mt-1 text-pretty text-xs text-muted-foreground">
+              <p className="mt-1 text-pretty text-xs text-subtle-foreground/75">
                 Check that BB is still running, then reopen the sidebar.
               </p>
             </div>
@@ -284,54 +311,72 @@ export function ThreadList({
                   ? `No threads match \u201C${searchQuery.trim()}\u201D`
                   : "No threads yet"}
               </p>
-              <p className="mt-1 text-pretty text-xs text-muted-foreground">
+              <p className="mt-1 text-pretty text-xs text-subtle-foreground/75">
                 {isSearching
                   ? "Clear the search to see every project."
                   : "Start one with the New thread button above and it will appear under its project."}
               </p>
             </div>
           ) : (
-            <>
+            // One group per project, separated by the host's own 4px step
+            // rather than a per-section top padding. BB's project list is a
+            // `SidebarMenu` with `gap-1`; this is that list.
+            <div className="flex w-full min-w-0 flex-col gap-1">
               {active.map((group) => renderSection(group, false))}
               {quiet.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => toggle(QUIET_SECTION_KEY)}
-                  aria-expanded={!isQuietCollapsed}
+                // The same header a project gets, down to which element does
+                // what: the row is not itself a button. A full-bleed
+                // aria-hidden target takes the pointer, the caret is the real
+                // control and owns keyboard focus, and the row carries no
+                // hover fill of its own — the caret brings its own.
+                <div
                   className={cn(
-                    "group/quiet mt-4 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left",
-                    HEADER_HEIGHT,
-                    FOCUS_RING,
-                    LIST_HOVER_TRANSITION,
-                    // One muted step, not a muted token diluted again by an
-                    // alpha: a section heading still has to be readable.
-                    "text-2xs font-semibold uppercase tracking-wide text-muted-foreground",
-                    "hover:bg-sidebar-accent/60 hover:text-foreground",
+                    SECTION_HEADER_CLASS,
+                    SIDEBAR_HOVER_ACTIONS_GAP_CLASS,
+                    // The one place this list still spends vertical space: the
+                    // boundary between the projects you are working in and the
+                    // ones merely present.
+                    "mt-3 pr-2",
                   )}
                 >
-                  {/* A heading, not a bare rule: it names what follows for a
-                    screen reader, where dimmed rows say nothing at all. */}
-                  <span
-                    role="heading"
-                    aria-level={2}
-                    className="min-w-0 flex-1 truncate"
-                  >
-                    No threads yet
-                  </span>
-                  <span className="shrink-0 tabular-nums">{quiet.length}</span>
-                  <Icon
-                    name="ChevronDown"
-                    className={cn(
-                      "size-3 shrink-0 motion-safe:transition-transform",
-                      isQuietCollapsed && "-rotate-90",
-                    )}
+                  <button
+                    type="button"
+                    aria-hidden="true"
+                    tabIndex={-1}
+                    onClick={() => toggle(QUIET_SECTION_KEY)}
+                    className="absolute inset-0 rounded-md"
                   />
-                </button>
+                  <span className={SECTION_HEADER_LABEL_CLASS}>
+                    {/* A heading, not a bare rule: it names what follows for a
+                      screen reader, where dimmed rows say nothing at all. */}
+                    <span
+                      role="heading"
+                      aria-level={2}
+                      className="min-w-0 truncate"
+                    >
+                      No threads yet
+                    </span>
+                    <SidebarChildToggleChevron
+                      isCollapsed={isQuietCollapsed}
+                      expandLabel="Expand No threads yet section"
+                      collapseLabel="Collapse No threads yet section"
+                      onToggle={() => toggle(QUIET_SECTION_KEY)}
+                      revealOnHover={!isQuietCollapsed}
+                      className="size-6"
+                    />
+                  </span>
+                  {/* It counts what it hides, so a collapsed group is not a
+                    mystery. Nothing competes for this slot here, so unlike a
+                    project's count it stays in flow and never fades. */}
+                  <span className="relative z-10 shrink-0 tabular-nums">
+                    {quiet.length}
+                  </span>
+                </div>
               ) : null}
               {isQuietCollapsed
                 ? null
                 : quiet.map((group) => renderSection(group, true))}
-            </>
+            </div>
           )}
         </div>
 
@@ -455,17 +500,45 @@ function ProjectSection({
   });
 
   return (
-    // A project is a group, and groups are separated by space rather than a
-    // rule: one step inside the group, two steps between them.
-    <section aria-label={group.projectName} className="pt-3 first:pt-1">
+    <section
+      aria-label={group.projectName}
+      className={cn(
+        "group/sidebar-section min-w-0 rounded-md transition-colors",
+        isDragging && "opacity-50",
+      )}
+    >
       <ProjectContextMenu groups={menu}>
         <div
-          className={cn(
-            "group/header relative flex w-full items-center gap-1.5 rounded-md pr-1",
-            LIST_HOVER_TRANSITION,
-            "hover:bg-sidebar-accent/60",
-            isDragging && "opacity-50",
-          )}
+          className={cn(SECTION_HEADER_CLASS, SIDEBAR_HOVER_ACTIONS_GAP_CLASS)}
+          draggable={isDraggable}
+          onDragStart={(event) => {
+            // The id travels in dataTransfer too, so a drop outside this list
+            // sees plain text rather than nothing.
+            event.dataTransfer.setData("text/plain", group.projectId);
+            event.dataTransfer.effectAllowed = "move";
+            onDragStateChange(group.projectId);
+          }}
+          onDragEnd={() => {
+            onDragStateChange(null);
+            setDropEdge(null);
+          }}
+          onDragOver={(event) => {
+            if (!isDraggable) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            setDropEdge(edgeFor(event));
+          }}
+          onDragLeave={() => setDropEdge(null)}
+          onDrop={(event) => {
+            if (!isDraggable) return;
+            event.preventDefault();
+            const edge = edgeFor(event);
+            setDropEdge(null);
+            // Dropping below a header means "after it", which is the same move
+            // as "before whatever follows it" — resolved on the server, where
+            // the authoritative order lives, by sending the neighbour id.
+            onDrop(edge === "before" ? group.projectId : nextInOrderId);
+          }}
         >
           {/*
             The drop line is painted, not bordered. A border added on hover
@@ -476,63 +549,44 @@ function ProjectSection({
             <span
               aria-hidden
               className={cn(
-                "pointer-events-none absolute inset-x-0 h-0.5 rounded-full bg-timeline-accent",
+                "pointer-events-none absolute inset-x-0 z-30 h-0.5 rounded-full bg-sidebar-ring",
                 dropEdge === "before" ? "-top-px" : "-bottom-px",
               )}
             />
           )}
+          {/*
+            A full-bleed toggle target for pointer users; the caret owns
+            keyboard focus. This is how BB's own section header splits the two,
+            so a click anywhere on the row collapses it without the row itself
+            becoming a second tab stop next to its caret.
+          */}
           <button
             type="button"
+            aria-hidden="true"
+            tabIndex={-1}
             onClick={onToggle}
-            aria-expanded={!isCollapsed}
-            draggable={isDraggable}
-            onDragStart={(event) => {
-              // The id travels in dataTransfer too, so a drop outside this list
-              // sees plain text rather than nothing.
-              event.dataTransfer.setData("text/plain", group.projectId);
-              event.dataTransfer.effectAllowed = "move";
-              onDragStateChange(group.projectId);
-            }}
-            onDragEnd={() => {
-              onDragStateChange(null);
-              setDropEdge(null);
-            }}
-            onDragOver={(event) => {
-              if (!isDraggable) return;
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
-              setDropEdge(edgeFor(event));
-            }}
-            onDragLeave={() => setDropEdge(null)}
-            onDrop={(event) => {
-              if (!isDraggable) return;
-              event.preventDefault();
-              const edge = edgeFor(event);
-              setDropEdge(null);
-              // Dropping below a header means "after it", which is the same move
-              // as "before whatever follows it" — resolved on the server, where
-              // the authoritative order lives, by sending the neighbour id.
-              onDrop(edge === "before" ? group.projectId : nextInOrderId);
-            }}
             className={cn(
-              "flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 pl-2 text-left",
-              HEADER_HEIGHT,
-              FOCUS_RING,
+              "absolute inset-0 rounded-md",
               isDraggable && "cursor-grab active:cursor-grabbing",
             )}
-          >
+          />
+          <span className={SECTION_HEADER_LABEL_CLASS}>
             {isManual ? (
-              <Icon
-                name="DragDropVertical"
+              <span
+                aria-hidden
                 className={cn(
-                  "size-3 shrink-0 text-muted-foreground",
+                  SIDEBAR_LEADING_GLYPH_SLOT_CLASS,
+                  "-ml-1 w-3",
                   // Present but quiet until the header is hovered, so the
                   // handle does not compete with the project name.
-                  "opacity-40 group-hover/header:opacity-100",
+                  "opacity-40 group-hover/sidebar-section:opacity-100",
                   LIST_HOVER_TRANSITION,
-                  !isDraggable && "opacity-0 group-hover/header:opacity-0",
+                  !isDraggable &&
+                    "opacity-0 group-hover/sidebar-section:opacity-0",
                 )}
-              />
+              >
+                <Icon name="DragDropVertical" className="size-3" />
+              </span>
             ) : null}
             {showIcon ? (
               <ProjectIcon
@@ -545,24 +599,55 @@ function ProjectSection({
                 className={cn(isQuiet && "opacity-50")}
               />
             ) : null}
-            <span className="min-w-0 flex-1 truncate text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="min-w-0 truncate" title={group.projectName}>
               {group.projectName}
-            </span>
-            <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
-              {group.threadCount > 0 ? group.threadCount : null}
             </span>
             {/* Nothing to expand under a project with no threads. */}
             {isQuiet ? null : (
-              <Icon
-                name="ChevronDown"
-                className={cn(
-                  "size-3 shrink-0 text-muted-foreground motion-safe:transition-transform",
-                  isCollapsed && "-rotate-90",
-                )}
+              <SidebarChildToggleChevron
+                isCollapsed={isCollapsed}
+                expandLabel={`Expand ${group.projectName} section`}
+                collapseLabel={`Collapse ${group.projectName} section`}
+                onToggle={onToggle}
+                // Open groups hide their caret until the row is hovered — the
+                // list is mostly open, and a column of carets is noise. A
+                // closed one keeps it, because it is the only thing saying
+                // there is something folded away.
+                revealOnHover={!isCollapsed}
+                className="size-6"
               />
             )}
-          </button>
-          <ProjectActionsButton projectName={group.projectName} groups={menu} />
+          </span>
+          {/*
+            The thread count rests where BB puts a collapsed group's rollup
+            glyph, and yields the slot to the actions the moment the row is
+            hovered or focused.
+          */}
+          {group.threadCount > 0 ? (
+            <span
+              aria-hidden
+              className={cn(
+                SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
+                "pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 tabular-nums",
+              )}
+            >
+              {group.threadCount}
+            </span>
+          ) : null}
+          <span className="relative z-20 inline-flex h-6 shrink-0 items-center">
+            <span
+              className={cn(
+                SIDEBAR_HOVER_ACTIONS_CLASS,
+                "inline-flex shrink-0 items-center",
+                SIDEBAR_HOVER_ACTIONS_GAP_CLASS,
+              )}
+            >
+              <ProjectActionsButton
+                projectName={group.projectName}
+                groups={menu}
+              />
+            </span>
+          </span>
         </div>
       </ProjectContextMenu>
 
@@ -570,12 +655,18 @@ function ProjectSection({
         // The group heading above the quiet projects already says this; only a
         // project that is empty *inside* the list of active ones repeats it.
         isQuiet ? null : (
-          <p className="px-2 py-1.5 text-2xs text-muted-foreground">
+          <p className="mt-1 py-0.5 pl-8 pr-2 text-xs leading-4 text-subtle-foreground/60">
             No threads yet
           </p>
         )
       ) : (
-        <>
+        // No hairline down the project's threads. BB reserves that for its
+        // `project` tree variant, which also pushes its root rows one depth
+        // step in to clear the line; the variant a project actually renders
+        // (`section`) starts its threads flush at depth 0 with no line, and a
+        // line at the host's offset would run straight through these rows.
+        // The nesting rail lives per parent thread instead — see `ThreadRow`.
+        <div className="mt-1">
           {group.pinned.length > 0 ? (
             <Branch
               nodes={group.pinned}
@@ -596,7 +687,7 @@ function ProjectSection({
             showPullRequests={showPullRequests}
             onNavigate={onNavigate}
           />
-        </>
+        </div>
       )}
     </section>
   );
@@ -626,7 +717,9 @@ function Branch({
   return (
     <ul
       {...(label === undefined ? {} : { "aria-label": label })}
-      className={cn("flex flex-col gap-px", className)}
+      // `space-y-0.5`, the host's own row rhythm: dense, but not so dense that
+      // two hover fills touch.
+      className={cn("space-y-0.5", className)}
     >
       {nodes.map((node) => (
         <ThreadRow

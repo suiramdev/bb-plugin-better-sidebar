@@ -7,6 +7,10 @@ tab.
 - **Threads grouped by project.** Collapsible project sections, pinned threads
   first, child threads nested under their parent, and BB's own status glyphs on
   each row.
+- **Looks like BB, because it is BB's own design.** The rows, project headers,
+  menus, spacing, and states are built from the same class vocabulary the
+  built-in sidebar uses, so the list reads as part of the app rather than as a
+  panel bolted into it.
 - **Order the projects your way.** Last activity, alphabetical, newest, oldest,
   or manual — drag the project headers into the order you want.
 - **A project icon, resolved for you.** By default a project's icon comes from
@@ -150,7 +154,9 @@ own confirmation.
 
 Right-clicking a thread gives it the same actions BB's own rows have — open in
 split, mark read or unread, pin, rename, archive, delete — with **Rename**
-editing the title in the row itself: Enter saves, Escape leaves it alone.
+editing the title in the row itself: Enter saves, Escape leaves it alone. The
+same actions sit behind the **⋯** button that appears on a row when you hover
+or tab to it, so they are reachable without a right-click.
 
 ## Development
 

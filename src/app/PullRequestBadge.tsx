@@ -40,8 +40,10 @@ function toneFor(pullRequest: PluginSidebarPullRequest): string {
     case "blocked":
       return "bg-sidebar-accent text-foreground";
     case "ready_to_merge":
-      return "bg-sidebar-accent text-timeline-accent";
+      // The host's own "this succeeded" foreground, so a mergeable PR here and
+      // a finished run in BB's rows speak with one colour.
+      return "bg-sidebar-accent text-success-foreground";
     default:
-      return "bg-sidebar-accent text-muted-foreground";
+      return "bg-sidebar-accent text-subtle-foreground";
   }
 }

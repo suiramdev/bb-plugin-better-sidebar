@@ -4,28 +4,34 @@ import {
   experimental_useSidebarThreadSplit as useSidebarThreadSplit,
 } from "@get-bb/plugin-sdk/app";
 import { Icon } from "@/components/ui/icon";
+import {
+  COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
+  COARSE_POINTER_GLYPH_BOX_CLASS,
+  COARSE_POINTER_ROW_ACTION_SIZE_CLASS,
+} from "@/components/ui/coarse-pointer-sizing";
 import { LIST_HOVER_TRANSITION } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 import { threadSubtitle, threadTitle, type ThreadNode } from "./grouping";
 import { PullRequestBadge } from "./PullRequestBadge";
-import { RowContextMenu } from "./RowContextMenu";
+import { RowContextMenu, ThreadActionsButton } from "./RowContextMenu";
 import { useThreadSelection } from "./SelectionContext";
+import {
+  SIDEBAR_HOVER_ACTIONS_CLASS,
+  SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
+  SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
+} from "./sidebarHoverActions";
+import {
+  SIDEBAR_ROW_BASE_CLASS,
+  SIDEBAR_ROW_GLYPH_SLOT_CLASS,
+  SIDEBAR_ROW_HEIGHT_CLASS,
+  SIDEBAR_ROW_INTERACTIVE_STATE_CLASS,
+  SIDEBAR_ROW_OPEN_IN_SPLIT_STATE_CLASS,
+  SIDEBAR_ROW_SELECTED_STATE_CLASS,
+  SIDEBAR_THREAD_GROUP_LINE_CLASS,
+  getSidebarThreadGroupLineLeft,
+  getSidebarThreadRowPaddingLeft,
+} from "./sidebarRowClasses";
 import { StatusGlyph } from "./StatusGlyph";
-
-/** Indent per nesting level, matched to the 16px icon column above it. */
-const INDENT_PX = 14;
-
-/**
- * The row's own height floor, not just its padding.
- *
- * `py-1` around 12px text lands at 24px, which is the WCAG 2.5.8 minimum with
- * nothing to spare, and it ignores the host's coarse-pointer step entirely — on
- * a touch device every other BB row grows and these stayed thumbnail-sized.
- * The host publishes the exact heights its own rows use, so this borrows them
- * rather than inventing a third density.
- */
-const ROW_HEIGHT =
-  "min-h-[var(--bb-sidebar-row-height,1.5rem)] max-md:pointer-coarse:min-h-[var(--bb-sidebar-row-height-coarse,2.25rem)]";
 
 /** "2nd", "3rd" — for the screen-reader label, where "2" alone says nothing. */
 const ORDINAL_SUFFIXES: Record<Intl.LDMLPluralRule, string> = {
@@ -43,9 +49,22 @@ function ordinal(position: number): string {
 }
 
 /**
- * One thread as a single line. `children` is the nested list of its child
- * threads, rendered inside this row's own `<li>` so the markup stays a valid
- * nested list.
+ * One thread as a single line, built to BB's own row contract.
+ *
+ * The geometry is the host's, not an approximation of it: depth is a 24px step
+ * applied as `padding-left` on the row itself (so a nested row's hover fill and
+ * focus ring still reach the sidebar's edge, where an indenting margin used to
+ * cut them short), the row stands at the host's published row height, and the
+ * hover/active/selected tints are the shared `sidebar-accent` and `state-active`
+ * tokens rather than a private ladder of alpha steps.
+ *
+ * The nesting rail is gone from here on purpose. BB draws one hairline per
+ * expanded project, running under the centre of its chevron, and `ThreadList`
+ * now draws that — a per-row segment stitched through the list gap was this
+ * plugin solving a problem the host solves once, one level up.
+ *
+ * `children` is the nested list of its child threads, rendered inside this
+ * row's own `<li>` so the markup stays a valid nested list.
  */
 export function ThreadRow({
   node,
@@ -69,6 +88,7 @@ export function ThreadRow({
   const isSelected = selection.isSelected(node.thread.id);
   const { splitProps, layout } = useSidebarThreadSplit(node.thread.id);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const title = threadTitle(node.thread);
   const subtitle = showBranch ? threadSubtitle(node.thread) : null;
 
@@ -77,39 +97,39 @@ export function ThreadRow({
       <li className="list-none">
         <div
           className={cn(
-            "relative rounded-md",
+            SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
+            "group/thread-row relative",
+            SIDEBAR_ROW_BASE_CLASS,
+            SIDEBAR_ROW_HEIGHT_CLASS,
             LIST_HOVER_TRANSITION,
-            isActive ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60",
+            isActive
+              ? SIDEBAR_ROW_SELECTED_STATE_CLASS
+              : SIDEBAR_ROW_INTERACTIVE_STATE_CLASS,
             // A thread open in another pane reads as present but not focused.
-            !isActive && layout !== null && "bg-sidebar-accent/30",
-            // Picked rows carry an inset ring rather than a third background
-            // tint: the active row already owns the strongest tint, and a
-            // fourth shade of the same colour would be unreadable next to it.
-            isSelected &&
-              "bg-sidebar-accent/50 ring-1 ring-inset ring-timeline-accent/60",
+            // The host resolves this tint against the sidebar itself, so it
+            // stays opaque instead of stacking with whatever is behind it.
+            !isActive &&
+              layout !== null &&
+              SIDEBAR_ROW_OPEN_IN_SPLIT_STATE_CLASS,
+            // An open menu holds the row lit, so the row you are acting on is
+            // still obvious once the pointer has left it for the menu.
+            !isActive && "has-[[data-state=open]]:bg-sidebar-accent",
+            // Picked rows carry an inset ring rather than another background
+            // tint: the active row already owns the strongest surface, and a
+            // second shade of it would be unreadable alongside.
+            isSelected && "ring-1 ring-inset ring-sidebar-ring/70",
             // A range-click on text otherwise paints a browser text selection
             // across half the list.
             selection.count > 0 && "select-none",
           )}
-          style={{ marginLeft: depth * INDENT_PX }}
+          style={{ paddingLeft: getSidebarThreadRowPaddingLeft(depth) }}
         >
-          {/*
-            The rail that makes the nesting readable. Each row draws its own
-            segment through the 1px list gap below it, so a run of siblings
-            reads as one continuous line without the indent moving into the
-            markup, where the parent row's own hit box would have to grow to
-            hold it.
-          */}
-          {depth > 0 ? (
-            <span
-              aria-hidden
-              className="pointer-events-none absolute -bottom-px -left-[7px] top-0 w-px bg-border/70"
-            />
-          ) : null}
           {/*
             A full-bleed anchor under the content, the way BB's own row does it:
             a button nested inside an anchor is invalid interactive content and
-            breaks keyboard behavior.
+            breaks keyboard behavior. It is the only positioned sibling at this
+            level, so it takes every click the content does not claim — content
+            that must be clickable raises itself with `relative z-10`.
           */}
           <a
             // Both attributes, or BB's numbered thread shortcuts and
@@ -152,84 +172,143 @@ export function ThreadRow({
               onNavigate();
             }}
             // The anchor is the row's whole hit target, so it is also the thing
-            // that must show focus — matched to the ring the sort and add
-            // controls above the list already use.
-            className="absolute inset-0 cursor-pointer rounded-md outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            // that must show focus — the host's sidebar ring, at the host's
+            // width, so a focused plugin row and a focused BB row are one ring.
+            className="absolute inset-0 rounded-md outline-none ring-sidebar-ring focus-visible:ring-2"
           />
-          <div
-            className={cn(
-              "pointer-events-none relative flex items-center gap-1.5 px-2 py-1",
-              ROW_HEIGHT,
-            )}
-          >
-            {/*
-              The active row is not left to a background tint alone: a tint one
-              step from the hover tint is the kind of difference you only see
-              with both on screen at once.
-            */}
-            {isActive ? (
-              <span
-                aria-hidden
-                className="absolute inset-y-1 -left-px w-0.5 rounded-full bg-timeline-accent"
-              />
-            ) : null}
+          {/*
+            No `bb-sidebar-hover-actions-inset` here. The host reserves an
+            extra action width because its overlay holds two buttons and grows
+            leftward past the slot the indicator rests in. This row's overlay
+            is a single trigger that lands exactly on that slot, so reserving
+            more would shove the title 24px on every hover for no reason.
+          */}
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
             {node.stackPosition === null ? null : (
               // The stack's own order, not a count of anything: a plain
               // number reads as the position it is, the way a stacked PR
               // is referred to by where it sits in the stack.
               <span
                 aria-hidden
-                className="w-3 shrink-0 text-right text-2xs tabular-nums text-muted-foreground"
+                className="w-3 shrink-0 text-right text-2xs tabular-nums text-subtle-foreground"
               >
                 {node.stackPosition}
               </span>
             )}
             {node.thread.originKind === "fork" ? (
-              <Icon
-                name="Fork"
-                className="size-3 shrink-0 text-muted-foreground"
-              />
+              <span className={cn(SIDEBAR_ROW_GLYPH_SLOT_CLASS, "size-3.5")}>
+                <Icon name="Fork" className="size-3.5" aria-hidden />
+              </span>
             ) : null}
             {isRenaming ? (
-              <RenameInput
-                title={title}
-                onDone={() => setIsRenaming(false)}
-                onCommit={(next) => {
-                  void actions.rename(node.thread.id, next);
-                }}
-              />
+              <span className="relative z-10 min-w-0 flex-1 overflow-visible">
+                <RenameInput
+                  title={title}
+                  onDone={() => setIsRenaming(false)}
+                  onCommit={(next) => {
+                    void actions.rename(node.thread.id, next);
+                  }}
+                />
+              </span>
             ) : (
               <span
                 className={cn(
-                  "min-w-0 flex-1 truncate text-xs",
-                  node.thread.isUnread || isActive
-                    ? "font-medium text-foreground"
-                    : "text-foreground",
-                  // An ancestor kept only to hold a search match is context, not
-                  // a result: it stays legible but recedes.
-                  node.isSearchAncestor && "font-normal text-muted-foreground",
+                  "min-w-0 truncate",
+                  // An ancestor kept only to hold a search match is context,
+                  // not a result: it stays legible but recedes.
+                  node.isSearchAncestor && "text-muted-foreground",
                 )}
+                title={title}
               >
                 {title}
               </span>
             )}
             {subtitle === null || isRenaming ? null : (
-              <span className="max-w-[40%] shrink-0 truncate text-2xs text-muted-foreground">
+              <span className="max-w-[40%] shrink-0 truncate text-2xs text-subtle-foreground">
                 {subtitle}
               </span>
             )}
             {showPullRequests && !isRenaming ? (
               <PullRequestBadge threadId={node.thread.id} />
             ) : null}
-            <span className="flex size-3.5 shrink-0 items-center justify-center">
-              <StatusGlyph
-                indicator={node.thread.indicator}
-                label={node.thread.indicatorLabel}
-              />
+          </span>
+          <span className="flex shrink-0 items-center gap-0.5">
+            <span
+              className={cn(
+                "flex shrink-0 items-center justify-end",
+                COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
+              )}
+            >
+              {/*
+                One slot, two occupants. The status glyph rests in it and the
+                actions trigger takes its place on hover or keyboard focus, so
+                the row never changes width and the trigger never needs space
+                of its own. Both are absolutely placed inside a slot sized to
+                the host's row-action box.
+              */}
+              <span
+                className={cn(
+                  "relative shrink-0",
+                  COARSE_POINTER_ROW_ACTION_SIZE_CLASS,
+                )}
+              >
+                <span
+                  data-sidebar-hover-actions-open={
+                    isMenuOpen ? "true" : undefined
+                  }
+                  className={cn(
+                    SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
+                    "absolute inset-0 flex items-center justify-center",
+                  )}
+                >
+                  <span
+                    data-sidebar-thread-trailing-indicator=""
+                    className={cn(
+                      SIDEBAR_ROW_GLYPH_SLOT_CLASS,
+                      COARSE_POINTER_GLYPH_BOX_CLASS,
+                    )}
+                  >
+                    <StatusGlyph
+                      indicator={node.thread.indicator}
+                      label={node.thread.indicatorLabel}
+                    />
+                  </span>
+                </span>
+                <span
+                  data-sidebar-hover-actions-open={
+                    isMenuOpen ? "true" : undefined
+                  }
+                  className={cn(
+                    SIDEBAR_HOVER_ACTIONS_CLASS,
+                    "absolute inset-y-0 right-0 z-10 flex items-center justify-end max-md:pointer-coarse:hidden",
+                  )}
+                >
+                  <ThreadActionsButton
+                    thread={node.thread}
+                    onRename={() => setIsRenaming(true)}
+                    onOpenChange={setIsMenuOpen}
+                  />
+                </span>
+              </span>
             </span>
-          </div>
+          </span>
         </div>
-        {children}
+        {node.children.length === 0 ? (
+          children
+        ) : (
+          // A parent thread owns the rail down its children, dropped from the
+          // centre of its own glyph column. This is BB's `ThreadTreeGroupLine`:
+          // one line per parent, rather than the segment-per-row rail this list
+          // used to stitch through the gaps between sibling rows.
+          <div className="relative">
+            <span
+              aria-hidden
+              className={SIDEBAR_THREAD_GROUP_LINE_CLASS}
+              style={{ left: getSidebarThreadGroupLineLeft(depth) }}
+            />
+            {children}
+          </div>
+        )}
       </li>
     </RowContextMenu>
   );
@@ -238,10 +317,9 @@ export function ThreadRow({
 /**
  * The row's title, in place, while it is being renamed.
  *
- * It sits above the row's full-bleed anchor (`pointer-events-auto`, since the
- * content layer is inert by design), commits on Enter or blur, and abandons on
- * Escape. An empty or unchanged name commits nothing: a rename that clears the
- * title is a mis-key, not an instruction.
+ * It sits above the row's full-bleed anchor, commits on Enter or blur, and
+ * abandons on Escape. An empty or unchanged name commits nothing: a rename that
+ * clears the title is a mis-key, not an instruction.
  */
 function RenameInput({
   title,
@@ -297,8 +375,8 @@ function RenameInput({
         }
       }}
       className={cn(
-        "pointer-events-auto relative z-10 min-w-0 flex-1 rounded-sm bg-background px-1 py-0 text-xs",
-        "text-foreground outline-none ring-1 ring-ring",
+        "w-full min-w-0 rounded-sm bg-background px-1 py-0 text-sm",
+        "text-foreground outline-none ring-1 ring-sidebar-ring",
       )}
     />
   );
