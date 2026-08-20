@@ -83,12 +83,24 @@ export const SIDEBAR_MORE_ACTION_TRIGGER_CLASS =
  "relative m-1 h-5 w-5 after:absolute after:left-1/2 after:top-1/2 after:h-7 after:w-7 after:-translate-x-1/2 after:-translate-y-1/2 after:content-[''] max-md:pointer-coarse:m-0 max-md:pointer-coarse:h-9 max-md:pointer-coarse:w-9 max-md:pointer-coarse:after:hidden";
 
 /**
- * The hairline itself, from the host's `ThreadTreeGroupLine`. `-bottom-0.5`
- * closes the 2px list gap under the last child so a run of them reads as one
- * unbroken line.
+ * The hairline down a group of child rows, from the host's
+ * `ThreadTreeGroupLine`. It spans the children block exactly (`top-0`,
+ * `bottom-0`) and sits at `z-30`, above the rows' hover fills so it stays
+ * unbroken as the pointer runs down them.
+ *
+ * Pair it with `getSidebarThreadGroupLineLeft(parentDepth)`, which puts it
+ * under the centre of the parent row's glyph column.
  */
 export const SIDEBAR_THREAD_GROUP_LINE_CLASS =
- "pointer-events-none absolute -bottom-0.5 top-0 z-[1] w-px bg-border-hairline opacity-70";
+  "pointer-events-none absolute bottom-0 top-0 z-30 w-px bg-border-hairline opacity-70";
+
+/**
+ * The host's `ThreadTreeLineContinuation`: the same hairline, carried *through*
+ * a header row so an outer group's line is not broken by a nested group's
+ * header. Sits under the rows (`z-[1]`) and overshoots the gap below it.
+ */
+export const SIDEBAR_THREAD_LINE_CONTINUATION_CLASS =
+  "pointer-events-none absolute -bottom-0.5 top-0 z-[1] w-px bg-border-hairline opacity-70";
 
 /**
  * The host's sidebar row height, expressed with its own values as fallbacks.

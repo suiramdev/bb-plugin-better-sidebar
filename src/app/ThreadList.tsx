@@ -368,10 +368,13 @@ export function ThreadList({
               </p>
             </div>
           ) : (
-            // One group per project, separated by the host's own 4px step
-            // rather than a per-section top padding. BB's project list is a
-            // `SidebarMenu` with `gap-1`; this is that list.
-            <div className="flex w-full min-w-0 flex-col gap-1">
+            // `space-y-4`, from the host's `SidebarSectionOrderList`. In BB's
+            // project mode each project *is* a top-level sidebar section, and
+            // those are separated by 16px — four times the step inside a
+            // project, which is what makes one project read as one block.
+            // (`ProjectListProjects` uses `gap-1`, but that path is the
+            // isolated collection the stories render, not the live list.)
+            <div className="min-w-0 space-y-4">
               {groups.map(renderSection)}
             </div>
           )}
@@ -727,6 +730,9 @@ function Branch({
         onNavigate={onNavigate}
         worktrees={worktrees}
         depth={rowDepth + 1}
+        // A nested block is denser than a top-level list, which is BB's own
+        // `relative space-y-px` under a parent row.
+        className="space-y-px"
       />
     </ThreadRow>
   );
@@ -746,6 +752,9 @@ function Branch({
             key={item.group.environmentId}
             group={item.group}
             depth={depth}
+            // A group nested under a parent thread sits inside that parent's
+            // hairline, so its header has to carry the line through.
+            parentLineDepth={depth > 0 ? depth - 1 : null}
             isCollapsed={worktrees.isCollapsed(item.group.environmentId)}
             onToggle={() => worktrees.toggle(item.group.environmentId)}
           >
@@ -761,7 +770,7 @@ function Branch({
                   ? item.group.name
                   : `${item.group.name}, ${ordinal(item.group.stackPosition)} in stack`
               }
-              className="space-y-0.5"
+              className="space-y-px"
             >
               {item.group.nodes.map((node) =>
                 renderNode(node, depth + 1, true),

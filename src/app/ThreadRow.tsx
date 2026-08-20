@@ -85,7 +85,9 @@ export function ThreadRow({
 
   return (
     <RowContextMenu thread={node.thread} onRename={() => setIsRenaming(true)}>
-      <li className="list-none">
+      {/* `space-y-0.5`: the host's own step between a row and the block of
+        children it opens. */}
+      <li className="list-none space-y-0.5">
         <div
           className={cn(
             SIDEBAR_HOVER_ACTIONS_ROW_CLASS,

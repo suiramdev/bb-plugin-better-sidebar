@@ -24,6 +24,9 @@ import {
   SIDEBAR_MORE_ACTION_TRIGGER_CLASS,
   SIDEBAR_ROW_BASE_CLASS,
   SIDEBAR_ROW_GLYPH_SLOT_CLASS,
+  SIDEBAR_THREAD_GROUP_LINE_CLASS,
+  SIDEBAR_THREAD_LINE_CONTINUATION_CLASS,
+  getSidebarThreadGroupLineLeft,
   getSidebarThreadRowPaddingLeft,
 } from "./sidebarRowClasses";
 import type { WorktreeGroup } from "./worktrees";
@@ -46,6 +49,7 @@ export function WorktreeRow({
   isCollapsed,
   onToggle,
   children,
+  parentLineDepth = null,
 }: {
   group: WorktreeGroup;
   depth: number;
@@ -53,11 +57,18 @@ export function WorktreeRow({
   onToggle: () => void;
   /** The rows inside the group; not rendered while it is collapsed. */
   children?: React.ReactNode;
+  /**
+   * Depth of the parent row whose hairline runs past this header, when the
+   * group is nested inside one. Null at the top of a project.
+   */
+  parentLineDepth?: number | null;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <li className="list-none">
+    // `space-y-0.5`: the host's own step between a header and the block of
+    // rows it opens.
+    <li className="list-none space-y-0.5">
       <div
         className={cn(
           SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
@@ -80,6 +91,15 @@ export function WorktreeRow({
           onClick={onToggle}
           className="absolute inset-0 rounded-md"
         />
+        {parentLineDepth === null ? null : (
+          // An outer group's hairline would otherwise break where this header
+          // interrupts it, so the header carries the segment through.
+          <span
+            aria-hidden
+            className={SIDEBAR_THREAD_LINE_CONTINUATION_CLASS}
+            style={{ left: getSidebarThreadGroupLineLeft(parentLineDepth) }}
+          />
+        )}
         {group.stackPosition === null ? null : (
           // The level's place in the stack, in the same slot and the same
           // treatment a lone stacked row uses — so a stack reads as one column
@@ -140,7 +160,18 @@ export function WorktreeRow({
           </div>
         </span>
       </div>
-      {isCollapsed ? null : children}
+      {isCollapsed ? null : (
+        // The hairline that ties the group's rows to the header above them,
+        // dropped from the centre of its glyph column.
+        <div className="relative">
+          <span
+            aria-hidden
+            className={SIDEBAR_THREAD_GROUP_LINE_CLASS}
+            style={{ left: getSidebarThreadGroupLineLeft(depth) }}
+          />
+          {children}
+        </div>
+      )}
     </li>
   );
 }
