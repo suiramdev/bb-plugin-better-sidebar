@@ -334,7 +334,14 @@ export function ThreadList({
           <SortMenu value={preferences.projectSort} onChange={setProjectSort} />
           <AddProjectButton onAdd={addProject} />
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+        {/*
+          No horizontal padding, because BB's list has none: `ProjectListShell`
+          is a bare `SidebarGroupContent` and the panel itself carries only
+          safe-area insets. Every row's own `pl-2` is the whole left offset,
+          which is what puts a title 8px from the panel edge — and what lets a
+          row's hover fill run edge to edge instead of floating in a gutter.
+        */}
+        <div className="min-h-0 flex-1 overflow-y-auto pb-2">
           {status === "loading" ? null : status === "error" ? (
             <div role="status" className="px-4 py-6 text-center">
               <p className="text-xs font-medium text-foreground">

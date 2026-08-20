@@ -502,9 +502,7 @@ test("a project with no threads is listed like any other, only dimmed", async ()
   expect(slot.getByLabelText("bb").querySelector(".opacity-50")).toBeNull();
 
   // Nothing to expand, so it carries no caret and no body.
-  expect(
-    slot.queryByRole("button", { name: /docs section/ }),
-  ).toBeNull();
+  expect(slot.queryByRole("button", { name: /docs section/ })).toBeNull();
 });
 test("every project carries an actions button that opens the project menu", async () => {
   const slot = await mountList({}, { sidebarThreads: WITH_QUIET_PROJECT });
