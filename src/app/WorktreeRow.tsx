@@ -81,6 +81,18 @@ export function WorktreeRow({
           onClick={onToggle}
           className="absolute inset-0 rounded-md"
         />
+        {group.stackPosition === null ? null : (
+          // The level's place in the stack, in the same slot and the same
+          // treatment a lone stacked row uses — so a stack reads as one column
+          // of numbers whether a level holds one thread or five. Decorative:
+          // the ordinal is spoken by the list this header opens.
+          <span
+            aria-hidden
+            className="relative z-10 w-3 shrink-0 text-right text-2xs tabular-nums text-subtle-foreground"
+          >
+            {group.stackPosition}
+          </span>
+        )}
         <span
           aria-hidden
           className={cn(
@@ -110,7 +122,10 @@ export function WorktreeRow({
           />
         </span>
         <span
-          className={cn("relative z-10 shrink-0", COARSE_POINTER_ROW_ACTION_SIZE_CLASS)}
+          className={cn(
+            "relative z-10 shrink-0",
+            COARSE_POINTER_ROW_ACTION_SIZE_CLASS,
+          )}
         >
           {/*
             What the header stands for, at rest: how many threads are in the
@@ -134,10 +149,7 @@ export function WorktreeRow({
               "absolute inset-0 flex items-center justify-end max-md:pointer-coarse:hidden",
             )}
           >
-            <WorktreeActionsButton
-              group={group}
-              onOpenChange={setIsMenuOpen}
-            />
+            <WorktreeActionsButton group={group} onOpenChange={setIsMenuOpen} />
           </div>
         </span>
       </div>
@@ -182,7 +194,10 @@ function WorktreeActionsButton({
           "hover:bg-transparent hover:text-foreground focus-visible:ring-2",
         )}
       >
-        <Icon name="MoreHorizontal" className={COARSE_POINTER_ICON_SIZE_CLASS} />
+        <Icon
+          name="MoreHorizontal"
+          className={COARSE_POINTER_ICON_SIZE_CLASS}
+        />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content

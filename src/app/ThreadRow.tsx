@@ -32,21 +32,7 @@ import {
   getSidebarThreadRowPaddingLeft,
 } from "./sidebarRowClasses";
 import { StatusGlyph } from "./StatusGlyph";
-
-/** "2nd", "3rd" — for the screen-reader label, where "2" alone says nothing. */
-const ORDINAL_SUFFIXES: Record<Intl.LDMLPluralRule, string> = {
-  one: "st",
-  two: "nd",
-  few: "rd",
-  other: "th",
-  zero: "th",
-  many: "th",
-};
-const ORDINAL_RULES = new Intl.PluralRules("en", { type: "ordinal" });
-
-function ordinal(position: number): string {
-  return `${position}${ORDINAL_SUFFIXES[ORDINAL_RULES.select(position)]}`;
-}
+import { ordinal } from "./ordinal";
 
 /**
  * One thread as a single line, built to BB's own row contract.

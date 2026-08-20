@@ -8,8 +8,8 @@ tab.
   first, child threads nested under their parent, and BB's own status glyphs on
   each row.
 - **Threads that share a worktree fold under it.** BB's own worktree grouping,
-  with its icon and its rules — and it composes with stacks rather than fighting
-  them.
+  with its icon and its rules — and a stack level is itself a worktree, so the
+  two compose instead of fighting.
 - **Looks like BB, because it is BB's own design.** The rows, project headers,
   menus, spacing, and states are built from the same class vocabulary the
   built-in sidebar uses, so the list reads as part of the app rather than as a
@@ -131,16 +131,27 @@ branch starts a stack rather than joining one.
 
 **A stack is always one layer deep.** A chain five branches long still reads as
 one parent and four numbered rows, and a stack that forks flattens depth-first,
-so the numbers follow the based-on chain. Threads sharing a branch share its
-number. Threads that are not in a stack keep the nesting they always had.
+so the numbers follow the based-on chain. Threads that are not in a stack keep
+the nesting they always had.
 
-**A stack wins over worktree grouping.** With both on, a thread already inside a
-stack is left to it: the stack numbers that thread by the branch it sits on and
-already gives threads sharing a worktree the same number, so folding them under
-a worktree header as well would tell one story twice, in two shapes that
-disagree about which is the row's real parent. Everything the stack does not
-claim groups by worktree as usual, so the two features compose instead of
-competing.
+**A stack level is a worktree.** A stack is a chain of branches and a branch is
+a checkout, so the two features are the same shape one level apart and compose
+directly: a level holding one thread is a numbered row, and a level holding
+several is a numbered worktree group.
+
+```text
+▸ Add auth endpoints          ← the branch cut from main
+    2 ▾ feat/hash         2    ← two threads on this branch, so a group
+          Hash passwords
+          Fix the salt
+    3   Add refresh tokens     ← one thread, so a plain numbered row
+```
+
+The number lives on the header, not on the rows under it, and those rows drop
+the branch label too — without that, two threads on one stacked branch printed
+the same number and the same branch twice, side by side, which read as a bug.
+Grouping is keyed on the worktree *and* the position, so a header's number is
+true of every row beneath it and two levels can never merge.
 
 ## Settings
 

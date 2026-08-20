@@ -28,13 +28,19 @@ import type { ThreadNode } from "./grouping";
 const UNNAMED_WORKTREE = "Worktree";
 
 export interface WorktreeGroup {
-  environmentId: string;
-  /** The worktree's name, else its branch, else "Worktree". */
-  name: string;
+ environmentId: string;
+ /** The worktree's name, else its branch, else "Worktree". */
+ name: string;
   /** At least two, in the order they were given. */
   nodes: ThreadNode[];
   /** Every thread under the header, nesting included. */
   threadCount: number;
+  /**
+   * The group's place in a stack, when every thread in it sits on the same
+   * stacked branch. A stack level *is* a worktree, so the number belongs on
+   * the header rather than repeated down every row underneath it.
+   */
+  stackPosition: number | null;
 }
 
 /**
@@ -42,8 +48,8 @@ export interface WorktreeGroup {
  * a renderer walks one ordered list rather than two parallel ones.
  */
 export type ThreadItem =
-  | { kind: "thread"; node: ThreadNode }
-  | { kind: "worktree"; group: WorktreeGroup };
+ | { kind: "thread"; node: ThreadNode }
+ | { kind: "worktree"; group: WorktreeGroup };
 
 /**
  * A thread's worktree, or null when it is not in one.
@@ -53,27 +59,42 @@ export type ThreadItem =
  * would recognise.
  */
 function worktreeIdOf(thread: PluginSidebarThread): string | null {
-  const environment = thread.environment;
-  if (environment === null || environment.id === null) return null;
-  const kind = environment.workspaceDisplayKind;
-  if (kind !== "managed-worktree" && kind !== "unmanaged-worktree") return null;
-  return environment.id;
+ const environment = thread.environment;
+ if (environment === null || environment.id === null) return null;
+ const kind = environment.workspaceDisplayKind;
+ if (kind !== "managed-worktree" && kind !== "unmanaged-worktree") return null;
+ return environment.id;
 }
 
 export function worktreeName(thread: PluginSidebarThread): string {
-  const environment = thread.environment;
-  const name = environment?.name ?? null;
-  if (name !== null && name.trim() !== "") return name;
-  const branchName = environment?.branchName ?? null;
-  if (branchName !== null && branchName.trim() !== "") return branchName;
-  return UNNAMED_WORKTREE;
+ const environment = thread.environment;
+ const name = environment?.name ?? null;
+ if (name !== null && name.trim() !== "") return name;
+ const branchName = environment?.branchName ?? null;
+ if (branchName !== null && branchName.trim() !== "") return branchName;
+ return UNNAMED_WORKTREE;
 }
 
 function countNodes(nodes: readonly ThreadNode[]): number {
-  return nodes.reduce(
-    (total, node) => total + 1 + countNodes(node.children),
-    0,
-  );
+ return nodes.reduce((total, node) => total + 1 + countNodes(node.children), 0);
+}
+
+/**
+ * The bucket a node groups into: its worktree, and its place in a stack.
+ *
+ * Both, because a stack level is a worktree and the two must agree. Keying on
+ * the pair means a group can never straddle two stack positions, so the number
+ * the header shows is true of every row under it by construction.
+ */
+function bucketOf(
+  node: ThreadNode,
+): { key: string; environmentId: string } | null {
+  const environmentId = worktreeIdOf(node.thread);
+  if (environmentId === null) return null;
+  return {
+    key: `${environmentId}\u0000${node.stackPosition ?? ""}`,
+    environmentId,
+  };
 }
 
 /**
@@ -84,25 +105,25 @@ function countNodes(nodes: readonly ThreadNode[]): number {
  * thread in it already sat, and the rest are lifted out from below. Re-sorting
  * here would quietly override the caller's rule.
  *
- * A node carrying a `stackPosition` is skipped. That thread is already inside a
- * stack, where it is numbered by the branch it sits on and shares that number
- * with anything else in its worktree — grouping it a second time would be the
- * same statement told twice, in two competing shapes.
+ * Stacked threads group too. A stack is a chain of branches and a branch is a
+ * worktree, so a level holding several threads is exactly a worktree group —
+ * and rendering it as one is what stops a stack from printing the same number
+ * and the same branch label on two adjacent rows. The level's number moves to
+ * the header and is stripped from the members, so it is stated once.
  */
 export function groupWorktrees(nodes: readonly ThreadNode[]): ThreadItem[] {
-  const byWorktree = new Map<string, ThreadNode[]>();
+  const byBucket = new Map<string, ThreadNode[]>();
   for (const node of nodes) {
-    if (node.stackPosition !== null) continue;
-    const environmentId = worktreeIdOf(node.thread);
-    if (environmentId === null) continue;
-    const bucket = byWorktree.get(environmentId);
-    if (bucket === undefined) byWorktree.set(environmentId, [node]);
+    const bucketKey = bucketOf(node);
+    if (bucketKey === null) continue;
+    const bucket = byBucket.get(bucketKey.key);
+    if (bucket === undefined) byBucket.set(bucketKey.key, [node]);
     else bucket.push(node);
   }
 
   const grouped = new Map<string, ThreadNode[]>();
-  for (const [environmentId, bucket] of byWorktree) {
-    if (bucket.length >= 2) grouped.set(environmentId, bucket);
+  for (const [key, bucket] of byBucket) {
+    if (bucket.length >= 2) grouped.set(key, bucket);
   }
   if (grouped.size === 0) {
     return nodes.map((node) => ({ kind: "thread", node }));
@@ -111,23 +132,26 @@ export function groupWorktrees(nodes: readonly ThreadNode[]): ThreadItem[] {
   const emitted = new Set<string>();
   const items: ThreadItem[] = [];
   for (const node of nodes) {
-    const environmentId =
-      node.stackPosition === null ? worktreeIdOf(node.thread) : null;
-    const bucket = environmentId === null ? undefined : grouped.get(environmentId);
-    if (bucket === undefined || environmentId === null) {
+    const bucketKey = bucketOf(node);
+    const bucket =
+      bucketKey === null ? undefined : grouped.get(bucketKey.key);
+    if (bucket === undefined || bucketKey === null) {
       items.push({ kind: "thread", node });
       continue;
     }
     // Every member after the first is drawn inside the header this one opened.
-    if (emitted.has(environmentId)) continue;
-    emitted.add(environmentId);
+    if (emitted.has(bucketKey.key)) continue;
+    emitted.add(bucketKey.key);
     items.push({
       kind: "worktree",
       group: {
-        environmentId,
+        environmentId: bucketKey.environmentId,
         name: worktreeName(node.thread),
-        nodes: bucket,
+        // The header now carries the stack number, so the rows under it stop
+        // repeating it — one statement, in one place.
+        nodes: bucket.map((member) => ({ ...member, stackPosition: null })),
         threadCount: countNodes(bucket),
+        stackPosition: node.stackPosition,
       },
     });
   }
@@ -141,21 +165,21 @@ export function groupWorktrees(nodes: readonly ThreadNode[]): ThreadItem[] {
  * does: a shift-click range must never sweep up rows that are not on screen.
  */
 export function groupedThreadIds(
-  nodes: readonly ThreadNode[],
-  isWorktreeExpanded: (environmentId: string) => boolean,
+ nodes: readonly ThreadNode[],
+ isWorktreeExpanded: (environmentId: string) => boolean,
 ): string[] {
-  const ids: string[] = [];
-  const pushNode = (node: ThreadNode): void => {
-    ids.push(node.thread.id);
-    ids.push(...groupedThreadIds(node.children, isWorktreeExpanded));
-  };
-  for (const item of groupWorktrees(nodes)) {
-    if (item.kind === "thread") {
-      pushNode(item.node);
-      continue;
-    }
-    if (!isWorktreeExpanded(item.group.environmentId)) continue;
-    for (const node of item.group.nodes) pushNode(node);
+ const ids: string[] = [];
+ const pushNode = (node: ThreadNode): void => {
+  ids.push(node.thread.id);
+  ids.push(...groupedThreadIds(node.children, isWorktreeExpanded));
+ };
+ for (const item of groupWorktrees(nodes)) {
+  if (item.kind === "thread") {
+   pushNode(item.node);
+   continue;
   }
-  return ids;
+  if (!isWorktreeExpanded(item.group.environmentId)) continue;
+  for (const node of item.group.nodes) pushNode(node);
+ }
+ return ids;
 }

@@ -4,7 +4,9 @@ import type { ThreadNode } from "./grouping";
 import { groupWorktrees, groupedThreadIds, worktreeName } from "./worktrees";
 import { makeThread } from "./test-fixtures";
 
-type Kind = NonNullable<PluginSidebarThread["environment"]>["workspaceDisplayKind"];
+type Kind = NonNullable<
+  PluginSidebarThread["environment"]
+>["workspaceDisplayKind"];
 
 function node(
   id: string,
@@ -36,14 +38,22 @@ function node(
   };
 }
 
+/**
+ * A readable shape for one sibling list. A thread is its id; a group is its
+ * name, its members, and — when it is a stack level — the number it carries.
+ */
 const kinds = (items: ReturnType<typeof groupWorktrees>): string[] =>
-  items.map((item) =>
-    item.kind === "thread"
-      ? item.node.thread.id
-      : `[${item.group.name}: ${item.group.nodes
-          .map((n) => n.thread.id)
-          .join(",")}]`,
-  );
+  items.map((item) => {
+    if (item.kind === "thread") {
+      return item.node.stackPosition === null
+        ? item.node.thread.id
+        : `${item.node.stackPosition}:${item.node.thread.id}`;
+    }
+    const position =
+      item.group.stackPosition === null ? "" : `${item.group.stackPosition}:`;
+    const ids = item.group.nodes.map((n) => n.thread.id).join(",");
+    return `${position}[${item.group.name}: ${ids}]`;
+  });
 
 describe("groupWorktrees", () => {
   test("folds two threads sharing a worktree under one header", () => {
@@ -97,24 +107,50 @@ describe("groupWorktrees", () => {
     expect(kinds(items)).toEqual(["[wt: a,b]"]);
   });
 
-  test("threads already inside a stack are left to the stack", () => {
-    // A stacked thread is numbered by the branch it sits on and shares that
-    // number with anything else in its worktree; a header would tell the same
-    // story a second time, in a competing shape.
+  test("a stack level holding several threads becomes one numbered group", () => {
+    // A stack is a chain of branches and a branch is a worktree, so a level
+    // with two threads in it *is* a worktree group. Left ungrouped it printed
+    // the same number and the same branch label on two adjacent rows.
+    const items = groupWorktrees([
+      node("a", { id: "env_1", branchName: "feat/x" }, { stackPosition: 2 }),
+      node("b", { id: "env_1", branchName: "feat/x" }, { stackPosition: 2 }),
+    ]);
+    expect(kinds(items)).toEqual(["2:[feat/x: a,b]"]);
+  });
+
+  test("the level's number moves to the header, off its rows", () => {
+    // Stated once, on the thing it is true of.
+    const [item] = groupWorktrees([
+      node("a", { id: "env_1", branchName: "feat/x" }, { stackPosition: 3 }),
+      node("b", { id: "env_1", branchName: "feat/x" }, { stackPosition: 3 }),
+    ]);
+    expect(item!.kind).toBe("worktree");
+    if (item!.kind !== "worktree") return;
+    expect(item!.group.stackPosition).toBe(3);
+    expect(item!.group.nodes.map((n) => n.stackPosition)).toEqual([null, null]);
+  });
+
+  test("two stack levels never merge, even in one worktree", () => {
+    // The bucket is the worktree *and* the position, so a header's number is
+    // true of every row under it by construction.
     const items = groupWorktrees([
       node("a", { id: "env_1", branchName: "feat/x" }, { stackPosition: 1 }),
-      node("b", { id: "env_1", branchName: "feat/x" }, { stackPosition: 1 }),
+      node("b", { id: "env_1", branchName: "feat/x" }, { stackPosition: 2 }),
     ]);
-    expect(kinds(items)).toEqual(["a", "b"]);
+    expect(kinds(items)).toEqual(["1:a", "2:b"]);
   });
 
   test("a stack anchor sitting beside a real group does not join it", () => {
     const items = groupWorktrees([
-      node("stacked", { id: "env_1", branchName: "feat/x" }, { stackPosition: 2 }),
+      node(
+        "stacked",
+        { id: "env_1", branchName: "feat/x" },
+        { stackPosition: 2 },
+      ),
       node("a", { id: "env_2", branchName: "feat/y" }),
       node("b", { id: "env_2", branchName: "feat/y" }),
     ]);
-    expect(kinds(items)).toEqual(["stacked", "[feat/y: a,b]"]);
+    expect(kinds(items)).toEqual(["2:stacked", "[feat/y: a,b]"]);
   });
 });
 
@@ -122,12 +158,13 @@ describe("worktreeName", () => {
   test("prefers the worktree's name, then its branch, then a fallback", () => {
     expect(
       worktreeName(
-        node("a", { id: "e", name: "Review copy", branchName: "feat/x" }).thread,
+        node("a", { id: "e", name: "Review copy", branchName: "feat/x" })
+          .thread,
       ),
     ).toBe("Review copy");
-    expect(worktreeName(node("a", { id: "e", branchName: "feat/x" }).thread)).toBe(
-      "feat/x",
-    );
+    expect(
+      worktreeName(node("a", { id: "e", branchName: "feat/x" }).thread),
+    ).toBe("feat/x");
     expect(worktreeName(node("a", { id: "e" }).thread)).toBe("Worktree");
     // Whitespace is not a name.
     expect(

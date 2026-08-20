@@ -10,14 +10,14 @@ import type { ProjectGroup } from "./grouping";
 import { groupedThreadIds } from "./worktrees";
 
 export interface Selection {
-  /** Where the next shift-click measures from; null when nothing is picked. */
-  anchorId: string | null;
-  ids: ReadonlySet<string>;
+ /** Where the next shift-click measures from; null when nothing is picked. */
+ anchorId: string | null;
+ ids: ReadonlySet<string>;
 }
 
 export const EMPTY_SELECTION: Selection = {
-  anchorId: null,
-  ids: new Set<string>(),
+ anchorId: null,
+ ids: new Set<string>(),
 };
 
 /**
@@ -32,29 +32,29 @@ export const EMPTY_SELECTION: Selection = {
  * range drawn across a collapsed worktree would silently include its threads.
  */
 export function orderedThreadIds(
-  groups: readonly ProjectGroup[],
-  isExpanded: (projectId: string) => boolean,
-  isWorktreeExpanded: (environmentId: string) => boolean = () => true,
+ groups: readonly ProjectGroup[],
+ isExpanded: (projectId: string) => boolean,
+ isWorktreeExpanded: (environmentId: string) => boolean = () => true,
 ): string[] {
-  const ids: string[] = [];
-  for (const group of groups) {
-    if (!isExpanded(group.projectId)) continue;
-    ids.push(...groupedThreadIds(group.pinned, isWorktreeExpanded));
-    ids.push(...groupedThreadIds(group.roots, isWorktreeExpanded));
-  }
-  return ids;
+ const ids: string[] = [];
+ for (const group of groups) {
+  if (!isExpanded(group.projectId)) continue;
+  ids.push(...groupedThreadIds(group.pinned, isWorktreeExpanded));
+  ids.push(...groupedThreadIds(group.roots, isWorktreeExpanded));
+ }
+ return ids;
 }
 
 /** Every id between the two, inclusive, in list order. Empty if either is gone. */
 export function rangeBetween(
-  order: readonly string[],
-  anchorId: string,
-  targetId: string,
+ order: readonly string[],
+ anchorId: string,
+ targetId: string,
 ): string[] {
-  const from = order.indexOf(anchorId);
-  const to = order.indexOf(targetId);
-  if (from === -1 || to === -1) return [];
-  return order.slice(Math.min(from, to), Math.max(from, to) + 1);
+ const from = order.indexOf(anchorId);
+ const to = order.indexOf(targetId);
+ if (from === -1 || to === -1) return [];
+ return order.slice(Math.min(from, to), Math.max(from, to) + 1);
 }
 
 /**
@@ -65,38 +65,38 @@ export function rangeBetween(
  * clicked row becomes the anchor and the only selection.
  */
 export function extendSelection(
-  current: Selection,
-  order: readonly string[],
-  targetId: string,
+ current: Selection,
+ order: readonly string[],
+ targetId: string,
 ): Selection {
-  const anchorId = current.anchorId;
-  if (anchorId === null) return selectOnly(targetId);
-  const range = rangeBetween(order, anchorId, targetId);
-  if (range.length === 0) return selectOnly(targetId);
-  return { anchorId, ids: new Set(range) };
+ const anchorId = current.anchorId;
+ if (anchorId === null) return selectOnly(targetId);
+ const range = rangeBetween(order, anchorId, targetId);
+ if (range.length === 0) return selectOnly(targetId);
+ return { anchorId, ids: new Set(range) };
 }
 
 /** Alt-click. Adds or removes one row, and re-anchors on the row touched. */
 export function toggleSelection(
-  current: Selection,
-  targetId: string,
+ current: Selection,
+ targetId: string,
 ): Selection {
-  const ids = new Set(current.ids);
-  if (ids.has(targetId)) {
-    ids.delete(targetId);
-    // Deselecting the anchor leaves the range with nothing to measure from,
-    // so the next shift-click starts over rather than reviving a dead row.
-    return {
-      anchorId: current.anchorId === targetId ? null : current.anchorId,
-      ids,
-    };
-  }
-  ids.add(targetId);
-  return { anchorId: targetId, ids };
+ const ids = new Set(current.ids);
+ if (ids.has(targetId)) {
+  ids.delete(targetId);
+  // Deselecting the anchor leaves the range with nothing to measure from,
+  // so the next shift-click starts over rather than reviving a dead row.
+  return {
+   anchorId: current.anchorId === targetId ? null : current.anchorId,
+   ids,
+  };
+ }
+ ids.add(targetId);
+ return { anchorId: targetId, ids };
 }
 
 export function selectOnly(targetId: string): Selection {
-  return { anchorId: targetId, ids: new Set([targetId]) };
+ return { anchorId: targetId, ids: new Set([targetId]) };
 }
 
 /**
@@ -104,15 +104,15 @@ export function selectOnly(targetId: string): Selection {
  * under the selection, or a project the user just collapsed.
  */
 export function pruneSelection(
-  current: Selection,
-  order: readonly string[],
+ current: Selection,
+ order: readonly string[],
 ): Selection {
-  const visible = new Set(order);
-  const ids = new Set([...current.ids].filter((id) => visible.has(id)));
-  if (ids.size === current.ids.size) return current;
-  const anchorId =
-    current.anchorId !== null && visible.has(current.anchorId)
-      ? current.anchorId
-      : null;
-  return { anchorId, ids };
+ const visible = new Set(order);
+ const ids = new Set([...current.ids].filter((id) => visible.has(id)));
+ if (ids.size === current.ids.size) return current;
+ const anchorId =
+  current.anchorId !== null && visible.has(current.anchorId)
+   ? current.anchorId
+   : null;
+ return { anchorId, ids };
 }

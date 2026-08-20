@@ -29,6 +29,7 @@ import { AddProjectButton } from "./AddProjectButton";
 import { ThreadRow } from "./ThreadRow";
 import { WorktreeRow } from "./WorktreeRow";
 import { groupWorktrees } from "./worktrees";
+import { ordinal } from "./ordinal";
 import { stepMoveTarget } from "./manual-move";
 import { useSidebarData, useStackBranches } from "./useSidebarData";
 import { applyStacks, environmentIdsFor } from "./stacking";
@@ -125,9 +126,7 @@ function writeCollapsed(storageKey: string, collapsed: Set<string>): void {
 }
 
 /** One collapsible set, persisted under its own key. */
-function useCollapsed(
-  storageKey: string,
-): [Set<string>, (id: string) => void] {
+function useCollapsed(storageKey: string): [Set<string>, (id: string) => void] {
   const [collapsed, setCollapsed] = useState<Set<string>>(() =>
     readCollapsed(storageKey),
   );
@@ -831,8 +830,19 @@ function Branch({
             onToggle={() => worktrees.toggle(item.group.environmentId)}
           >
             {/* The worktree header owns a level, so its threads sit one step
-              in — the same step a child thread takes under its parent. */}
-            <ul className="space-y-0.5">
+              in — the same step a child thread takes under its parent.
+
+              The list carries the accessible name because the number on the
+              header is decorative: a bare "2" read out before a worktree name
+              would sound like part of it, exactly as it would on a row. */}
+            <ul
+              aria-label={
+                item.group.stackPosition === null
+                  ? item.group.name
+                  : `${item.group.name}, ${ordinal(item.group.stackPosition)} in stack`
+              }
+              className="space-y-0.5"
+            >
               {item.group.nodes.map((node) =>
                 renderNode(node, depth + 1, true),
               )}

@@ -903,7 +903,9 @@ test("threads sharing a worktree fold under one header, alone ones do not", asyn
   expect(header).toBeTruthy();
   // A thread alone in its worktree keeps its own row: a header over one thread
   // would say nothing the row below it does not already say.
-  expect(slot.queryByRole("button", { name: /chore\/deps threads/ })).toBeNull();
+  expect(
+    slot.queryByRole("button", { name: /chore\/deps threads/ }),
+  ).toBeNull();
   expect(slot.getByText("Bump the deps")).toBeTruthy();
 
   // The header counts what it holds and carries BB's worktree glyph.
@@ -947,18 +949,37 @@ test("grouping is off when the feature is", async () => {
     },
   );
   await slot.findByText("Wire the parser");
-  expect(slot.queryByRole("button", { name: /feat\/parser threads/ })).toBeNull();
+  expect(
+    slot.queryByRole("button", { name: /feat\/parser threads/ }),
+  ).toBeNull();
   expect(slot.getByText("Cover the parser")).toBeTruthy();
 });
 
-test("a stack keeps its own shape instead of being grouped by worktree", async () => {
-  // Both stacked threads share one worktree, so worktree grouping would claim
-  // them — but the stack already numbers them, and telling that story twice in
-  // two competing shapes is worse than either alone.
-  const slot = await mountList(
+/** A stack whose middle branch holds two threads: where the two features meet. */
+const STACK_MULTI = {
+  threads: [
+    ...STACK_THREADS.threads,
+    makeThread({
+      id: "thr_b2",
+      title: "Fix the salt",
+      projectId: "proj_1",
+      createdAt: 5,
+      environment: {
+        id: "env_b",
+        name: null,
+        branchName: "feat/hash",
+        workspaceDisplayKind: "managed-worktree",
+      },
+    }),
+  ],
+  projects: [makeProject({ id: "proj_1", name: "bb" })],
+};
+
+async function mountStack(threads: typeof STACK_THREADS) {
+  return await mountList(
     {},
     {
-      sidebarThreads: STACK_THREADS,
+      sidebarThreads: threads,
       rpc: sidebarRpc({
         sidebar: () => ({
           features: { ...FEATURES, stackedThreads: true, worktreeGroups: true },
@@ -970,10 +991,43 @@ test("a stack keeps its own shape instead of being grouped by worktree", async (
       }),
     },
   );
+}
 
+test("a stack level with one thread stays a plain numbered row", async () => {
+  const slot = await mountStack(STACK_THREADS);
   await slot.findByLabelText("Hash passwords, 2nd in stack");
-  expect(slot.queryByRole("button", { name: /threads$/ })).toBeNull();
+  // Nothing to group: every branch here holds exactly one thread.
   expect(slot.container.querySelector('[data-icon="FolderGit"]')).toBeNull();
+});
+
+test("a stack level with several threads becomes one numbered worktree", async () => {
+  const slot = await mountStack(STACK_MULTI);
+  await slot.findByLabelText("Add refresh tokens, 3rd in stack");
+
+  // The level is a worktree, so it gets the worktree header — carrying the
+  // stack number once instead of printing it on each row underneath.
+  const header = slot.getByRole("button", { name: /Collapse feat\/hash/ });
+  const row = header.closest("div.bb-sidebar-hover-actions-row")!;
+  expect(row.querySelector('[data-icon="FolderGit"]')).toBeTruthy();
+  expect(row.textContent).toContain("2");
+
+  // Both threads sit inside it, one step further in, and neither repeats the
+  // number or the branch its header already names.
+  const list = slot.getByRole("list", { name: "feat/hash, 2nd in stack" });
+  const inside = [...list.querySelectorAll("div[style]")];
+  expect(inside.map((r) => (r as HTMLElement).style.paddingLeft)).toEqual([
+    "56px",
+    "56px",
+  ]);
+  for (const member of inside) {
+    expect(member.textContent).not.toContain("feat/hash");
+  }
+
+  // The rest of the stack is untouched: still a numbered row at the same level.
+  const solo = slot
+    .getByLabelText("Add refresh tokens, 3rd in stack")
+    .closest("div[style]")!;
+  expect((solo as HTMLElement).style.paddingLeft).toBe("32px");
 });
 
 test("a grouped row drops the branch its header already names", async () => {

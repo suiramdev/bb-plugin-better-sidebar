@@ -175,9 +175,7 @@ export default async function plugin(bb: BbPluginApi) {
         }),
       );
       return {
-        branches: Object.fromEntries(
-          entries.filter((entry) => entry !== null),
-        ),
+        branches: Object.fromEntries(entries.filter((entry) => entry !== null)),
       };
     },
     favicon: async ({ projectId }) => {
