@@ -374,9 +374,7 @@ export function ThreadList({
             // project, which is what makes one project read as one block.
             // (`ProjectListProjects` uses `gap-1`, but that path is the
             // isolated collection the stories render, not the live list.)
-            <div className="min-w-0 space-y-4">
-              {groups.map(renderSection)}
-            </div>
+            <div className="min-w-0 space-y-4">{groups.map(renderSection)}</div>
           )}
         </div>
 

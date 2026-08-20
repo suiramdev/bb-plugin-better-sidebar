@@ -17,7 +17,7 @@
  */
 
 export const SIDEBAR_ROW_BASE_CLASS =
- "flex w-full items-center gap-2 rounded-md pr-0 text-sm transition-colors";
+  "flex w-full items-center gap-2 rounded-md pr-0 text-sm transition-colors";
 
 /**
  * Leading-glyph slot shared by sidebar rows: centers the glyph and paints it in
@@ -25,16 +25,16 @@ export const SIDEBAR_ROW_BASE_CLASS =
  * glyph box sizing and any positioning they need.
  */
 export const SIDEBAR_ROW_GLYPH_SLOT_CLASS =
- "inline-flex shrink-0 items-center justify-center text-subtle-foreground";
+  "inline-flex shrink-0 items-center justify-center text-subtle-foreground";
 
 export const SIDEBAR_WORKING_STATUS_COLOR_CLASS = "text-muted-foreground/50";
 
 export const SIDEBAR_SUCCESS_STATUS_DOT_CLASS =
- "size-[5px] rounded-full bg-muted-foreground/60 max-md:pointer-coarse:size-1.5";
+  "size-[5px] rounded-full bg-muted-foreground/60 max-md:pointer-coarse:size-1.5";
 
 /** Identity-glyph slot: the section / project icon box on a disclosure header. */
 export const SIDEBAR_LEADING_GLYPH_SLOT_CLASS =
- "inline-flex w-4 shrink-0 items-center justify-center";
+  "inline-flex w-4 shrink-0 items-center justify-center";
 
 const SIDEBAR_THREAD_ROW_BASE_PADDING_PX = 8;
 const SIDEBAR_THREAD_ROW_DEPTH_STEP_PX = 24;
@@ -43,9 +43,10 @@ const SIDEBAR_THREAD_ROW_GLYPH_CENTER_OFFSET_PX = 8;
 export const SIDEBAR_STANDARD_ROW_PADDING_CLASS = "pl-2";
 
 export function getSidebarThreadRowPaddingLeft(depth: number): number {
- return (
-  SIDEBAR_THREAD_ROW_BASE_PADDING_PX + depth * SIDEBAR_THREAD_ROW_DEPTH_STEP_PX
- );
+  return (
+    SIDEBAR_THREAD_ROW_BASE_PADDING_PX +
+    depth * SIDEBAR_THREAD_ROW_DEPTH_STEP_PX
+  );
 }
 
 /**
@@ -54,14 +55,14 @@ export function getSidebarThreadRowPaddingLeft(depth: number): number {
  * its children.
  */
 export function getSidebarThreadGroupLineLeft(depth: number): number {
- return (
-  getSidebarThreadRowPaddingLeft(depth) +
-  SIDEBAR_THREAD_ROW_GLYPH_CENTER_OFFSET_PX
- );
+  return (
+    getSidebarThreadRowPaddingLeft(depth) +
+    SIDEBAR_THREAD_ROW_GLYPH_CENTER_OFFSET_PX
+  );
 }
 
 export const SIDEBAR_ROW_INTERACTIVE_STATE_CLASS =
- "cursor-pointer text-sidebar-foreground/85 dark:text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
+  "cursor-pointer text-sidebar-foreground/85 dark:text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
 
 /**
  * The host composes this from `CONTEXT_SELECTION_SURFACE_CLASS`
@@ -70,17 +71,17 @@ export const SIDEBAR_ROW_INTERACTIVE_STATE_CLASS =
  * a row picked up by the host's own sticky CSS still paints opaquely.
  */
 export const SIDEBAR_ROW_SELECTED_STATE_CLASS =
- "bg-state-active bb-sidebar-selected-row text-sidebar-foreground";
+  "bg-state-active bb-sidebar-selected-row text-sidebar-foreground";
 
 /**
  * A quieter marker for a thread that is open in an unfocused split pane.
  * theme.css resolves this tint against the sidebar.
  */
 export const SIDEBAR_ROW_OPEN_IN_SPLIT_STATE_CLASS =
- "bb-sidebar-open-in-split-row";
+  "bb-sidebar-open-in-split-row";
 
 export const SIDEBAR_MORE_ACTION_TRIGGER_CLASS =
- "relative m-1 h-5 w-5 after:absolute after:left-1/2 after:top-1/2 after:h-7 after:w-7 after:-translate-x-1/2 after:-translate-y-1/2 after:content-[''] max-md:pointer-coarse:m-0 max-md:pointer-coarse:h-9 max-md:pointer-coarse:w-9 max-md:pointer-coarse:after:hidden";
+  "relative m-1 h-5 w-5 after:absolute after:left-1/2 after:top-1/2 after:h-7 after:w-7 after:-translate-x-1/2 after:-translate-y-1/2 after:content-[''] max-md:pointer-coarse:m-0 max-md:pointer-coarse:h-9 max-md:pointer-coarse:w-9 max-md:pointer-coarse:after:hidden";
 
 /**
  * The hairline down a group of child rows, from the host's
@@ -108,4 +109,4 @@ export const SIDEBAR_THREAD_LINE_CONTINUATION_CLASS =
  * only matters in a context that has not loaded the app theme.
  */
 export const SIDEBAR_ROW_HEIGHT_CLASS =
- "h-[var(--bb-sidebar-row-height,1.75rem)] max-md:pointer-coarse:h-[var(--bb-sidebar-row-height-coarse,2.5rem)]";
+  "h-[var(--bb-sidebar-row-height,1.75rem)] max-md:pointer-coarse:h-[var(--bb-sidebar-row-height-coarse,2.5rem)]";

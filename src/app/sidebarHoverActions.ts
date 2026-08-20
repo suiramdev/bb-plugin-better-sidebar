@@ -41,4 +41,4 @@ export const SIDEBAR_HOVER_ACTIONS_MOBILE_ALWAYS_VALUE = "always";
  * and a subtle foreground diluted once more.
  */
 export const CHROME_SECTION_LABEL_CLASS =
- "text-xs font-normal leading-5 text-subtle-foreground/75";
+  "text-xs font-normal leading-5 text-subtle-foreground/75";
