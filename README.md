@@ -111,16 +111,30 @@ the header does not carry.
 ## Stacked threads
 
 Off by default. When on, threads whose branches are cut from one another are
-drawn the way a stacked pull request reads: the bottom of the stack keeps its
-plain row, and everything built on top of it is numbered `2`, `3`, `4` and
-nested one layer under it.
+drawn the way a stacked pull request reads: one run of levels, bottom first,
+numbered `1`, `2`, `3` down a single column.
+
+**A stack level is a worktree.** A stack is a chain of branches and a branch is
+a checkout, so the two features are the same idea one level apart and compose
+without a special case: a level holding one thread is a numbered row, and a
+level holding several is a numbered worktree group — the bottom included.
 
 ```text
-▸ Add auth endpoints          ← the branch cut from main
-    2  Hash passwords         ← based on feat/auth
-    3  Add refresh tokens     ← based on feat/hash
-    4  Rate-limit login       ← the second branch off feat/auth
+1 ▾ feat/auth           2   ← the branch cut from main, two threads on it
+      Add auth endpoints
+      Review the endpoints
+2 ▾ feat/hash           2   ← based on feat/auth
+      Hash passwords
+      Fix the salt
+3   Add refresh tokens      ← based on feat/hash, one thread, so a row
 ```
+
+**Every level is a sibling.** The stack used to hang off its bottom *thread*,
+which made that one thread both a row and the stack's container: the bottom
+could never be a group, and its siblings were pushed underneath it as peers of
+the branches built on top of them — two different relationships drawn as one. A
+run of levels appoints no container, so the question does not arise and the
+numbers read as one unbroken column.
 
 **The signal is the branch, not the thread.** BB's thread parenting is
 orchestration — a parent coordinates a child and gets its lifecycle events —
@@ -129,28 +143,14 @@ one worktree, in which case neither is based on the other. So a stack is read
 from the environment's base branch alone, and a branch cut from the default
 branch starts a stack rather than joining one.
 
-**A stack is always one layer deep.** A chain five branches long still reads as
-one parent and four numbered rows, and a stack that forks flattens depth-first,
-so the numbers follow the based-on chain. Threads that are not in a stack keep
-the nesting they always had.
+**A stack is always flat.** A chain five branches long is five numbered levels,
+and a stack that forks flattens depth-first so the numbers follow the based-on
+chain. Threads that are not in a stack keep the nesting they always had.
 
-**A stack level is a worktree.** A stack is a chain of branches and a branch is
-a checkout, so the two features are the same shape one level apart and compose
-directly: a level holding one thread is a numbered row, and a level holding
-several is a numbered worktree group.
-
-```text
-▸ Add auth endpoints          ← the branch cut from main
-    2 ▾ feat/hash         2    ← two threads on this branch, so a group
-          Hash passwords
-          Fix the salt
-    3   Add refresh tokens     ← one thread, so a plain numbered row
-```
-
-The number lives on the header, not on the rows under it, and those rows drop
-the branch label too — without that, two threads on one stacked branch printed
-the same number and the same branch twice, side by side, which read as a bug.
-Grouping is keyed on the worktree *and* the position, so a header's number is
+The number lives on a level's header, not on the rows under it, and those rows
+drop the branch label too — without that, two threads on one branch printed the
+same number and the same branch twice, side by side, which read as a bug.
+Grouping is keyed on the worktree _and_ the position, so a header's number is
 true of every row beneath it and two levels can never merge.
 
 ## Settings

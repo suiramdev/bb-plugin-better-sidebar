@@ -31,16 +31,16 @@ export interface WorktreeGroup {
  environmentId: string;
  /** The worktree's name, else its branch, else "Worktree". */
  name: string;
-  /** At least two, in the order they were given. */
-  nodes: ThreadNode[];
-  /** Every thread under the header, nesting included. */
-  threadCount: number;
-  /**
-   * The group's place in a stack, when every thread in it sits on the same
-   * stacked branch. A stack level *is* a worktree, so the number belongs on
-   * the header rather than repeated down every row underneath it.
-   */
-  stackPosition: number | null;
+ /** At least two, in the order they were given. */
+ nodes: ThreadNode[];
+ /** Every thread under the header, nesting included. */
+ threadCount: number;
+ /**
+  * The group's place in a stack, when every thread in it sits on the same
+  * stacked branch. A stack level *is* a worktree, so the number belongs on
+  * the header rather than repeated down every row underneath it.
+  */
+ stackPosition: number | null;
 }
 
 /**
@@ -87,14 +87,14 @@ function countNodes(nodes: readonly ThreadNode[]): number {
  * the header shows is true of every row under it by construction.
  */
 function bucketOf(
-  node: ThreadNode,
+ node: ThreadNode,
 ): { key: string; environmentId: string } | null {
-  const environmentId = worktreeIdOf(node.thread);
-  if (environmentId === null) return null;
-  return {
-    key: `${environmentId}\u0000${node.stackPosition ?? ""}`,
-    environmentId,
-  };
+ const environmentId = worktreeIdOf(node.thread);
+ if (environmentId === null) return null;
+ return {
+  key: `${environmentId}\u0000${node.stackPosition ?? ""}`,
+  environmentId,
+ };
 }
 
 /**
@@ -112,50 +112,49 @@ function bucketOf(
  * the header and is stripped from the members, so it is stated once.
  */
 export function groupWorktrees(nodes: readonly ThreadNode[]): ThreadItem[] {
-  const byBucket = new Map<string, ThreadNode[]>();
-  for (const node of nodes) {
-    const bucketKey = bucketOf(node);
-    if (bucketKey === null) continue;
-    const bucket = byBucket.get(bucketKey.key);
-    if (bucket === undefined) byBucket.set(bucketKey.key, [node]);
-    else bucket.push(node);
-  }
+ const byBucket = new Map<string, ThreadNode[]>();
+ for (const node of nodes) {
+  const bucketKey = bucketOf(node);
+  if (bucketKey === null) continue;
+  const bucket = byBucket.get(bucketKey.key);
+  if (bucket === undefined) byBucket.set(bucketKey.key, [node]);
+  else bucket.push(node);
+ }
 
-  const grouped = new Map<string, ThreadNode[]>();
-  for (const [key, bucket] of byBucket) {
-    if (bucket.length >= 2) grouped.set(key, bucket);
-  }
-  if (grouped.size === 0) {
-    return nodes.map((node) => ({ kind: "thread", node }));
-  }
+ const grouped = new Map<string, ThreadNode[]>();
+ for (const [key, bucket] of byBucket) {
+  if (bucket.length >= 2) grouped.set(key, bucket);
+ }
+ if (grouped.size === 0) {
+  return nodes.map((node) => ({ kind: "thread", node }));
+ }
 
-  const emitted = new Set<string>();
-  const items: ThreadItem[] = [];
-  for (const node of nodes) {
-    const bucketKey = bucketOf(node);
-    const bucket =
-      bucketKey === null ? undefined : grouped.get(bucketKey.key);
-    if (bucket === undefined || bucketKey === null) {
-      items.push({ kind: "thread", node });
-      continue;
-    }
-    // Every member after the first is drawn inside the header this one opened.
-    if (emitted.has(bucketKey.key)) continue;
-    emitted.add(bucketKey.key);
-    items.push({
-      kind: "worktree",
-      group: {
-        environmentId: bucketKey.environmentId,
-        name: worktreeName(node.thread),
-        // The header now carries the stack number, so the rows under it stop
-        // repeating it — one statement, in one place.
-        nodes: bucket.map((member) => ({ ...member, stackPosition: null })),
-        threadCount: countNodes(bucket),
-        stackPosition: node.stackPosition,
-      },
-    });
+ const emitted = new Set<string>();
+ const items: ThreadItem[] = [];
+ for (const node of nodes) {
+  const bucketKey = bucketOf(node);
+  const bucket = bucketKey === null ? undefined : grouped.get(bucketKey.key);
+  if (bucket === undefined || bucketKey === null) {
+   items.push({ kind: "thread", node });
+   continue;
   }
-  return items;
+  // Every member after the first is drawn inside the header this one opened.
+  if (emitted.has(bucketKey.key)) continue;
+  emitted.add(bucketKey.key);
+  items.push({
+   kind: "worktree",
+   group: {
+    environmentId: bucketKey.environmentId,
+    name: worktreeName(node.thread),
+    // The header now carries the stack number, so the rows under it stop
+    // repeating it — one statement, in one place.
+    nodes: bucket.map((member) => ({ ...member, stackPosition: null })),
+    threadCount: countNodes(bucket),
+    stackPosition: node.stackPosition,
+   },
+  });
+ }
+ return items;
 }
 
 /**

@@ -56,7 +56,7 @@ function shape(nodes: readonly ThreadNode[], depth = 0): string[] {
   ]);
 }
 
-test("a chain of branches becomes one root with the rest numbered under it", () => {
+test("a chain of branches becomes one flat run, numbered from the bottom", () => {
   const threads = [
     threadOn("auth", "env_a", 1),
     threadOn("hash", "env_b", 2),
@@ -70,7 +70,9 @@ test("a chain of branches becomes one root with the rest numbered under it", () 
 
   const [group] = groupsFor(threads, branches);
 
-  expect(shape(group!.roots)).toEqual(["auth:-", "  hash:2", "  refresh:3"]);
+  // Every level is numbered, the bottom included: the numbers are the spine
+  // that says these rows are one stack.
+  expect(shape(group!.roots)).toEqual(["auth:1", "hash:2", "refresh:3"]);
 });
 
 test("a stack that forks flattens depth-first, so numbers follow the chain", () => {
@@ -94,10 +96,10 @@ test("a stack that forks flattens depth-first, so numbers follow the chain", () 
   // refresh is 3 because it sits on hash; ratelimit is the second branch off
   // the bottom and therefore 4.
   expect(shape(group!.roots)).toEqual([
-    "auth:-",
-    "  hash:2",
-    "  refresh:3",
-    "  ratelimit:4",
+    "auth:1",
+    "hash:2",
+    "refresh:3",
+    "ratelimit:4",
   ]);
 });
 
@@ -148,15 +150,17 @@ test("threads sharing a stacked branch share its position", () => {
 
   const [group] = groupsFor(threads, branches);
 
+  // Two threads on one stacked branch share its number; the renderer folds
+  // them into a single group carrying it once.
   expect(shape(group!.roots)).toEqual([
-    "auth:-",
-    "  hash:2",
-    "  hash-review:2",
-    "  refresh:3",
+    "auth:1",
+    "hash:2",
+    "hash-review:2",
+    "refresh:3",
   ]);
 });
 
-test("a stack never nests deeper than one layer", () => {
+test("a stack is a flat run however long the chain is", () => {
   const threads = [
     threadOn("a", "env_a", 1),
     threadOn("b", "env_b", 2),
@@ -177,13 +181,14 @@ test("a stack never nests deeper than one layer", () => {
     (line) => (line.length - line.trimStart().length) / 2,
   );
 
-  expect(Math.max(...depths)).toBe(1);
+  // No nesting at all now: a stack is a run of sibling levels.
+  expect(Math.max(...depths)).toBe(0);
   expect(shape(group!.roots)).toEqual([
-    "a:-",
-    "  b:2",
-    "  c:3",
-    "  d:4",
-    "  e:5",
+    "a:1",
+    "b:2",
+    "c:3",
+    "d:4",
+    "e:5",
   ]);
 });
 
@@ -221,7 +226,7 @@ test("threads with no environment are untouched", () => {
 
   const [group] = groupsFor(threads, branches);
 
-  expect(shape(group!.roots)).toEqual(["auth:-", "  hash:2", "loose:-"]);
+  expect(shape(group!.roots)).toEqual(["auth:1", "hash:2", "loose:-"]);
 });
 
 test("with no branch facts the list keeps the shape it already had", () => {
@@ -301,9 +306,9 @@ test("a remote-prefixed trunk is recognised as trunk, not as a stack link", () =
   // from trunk and stands apart rather than joining it.
   expect(shape(group!.roots)).toEqual([
     "pan:-",
-    "shell:-",
-    "  pane:2",
-    "  cli:3",
+    "shell:1",
+    "pane:2",
+    "cli:3",
   ]);
 });
 
@@ -351,5 +356,5 @@ test("a remote-prefixed base still finds the branch it was cut from", () => {
 
   const [group] = groupsFor(threads, branches);
 
-  expect(shape(group!.roots)).toEqual(["base:-", "  top:2"]);
+  expect(shape(group!.roots)).toEqual(["base:1", "top:2"]);
 });

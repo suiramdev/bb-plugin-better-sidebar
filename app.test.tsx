@@ -729,7 +729,7 @@ test("stacked threads stay off until the feature is on, and cost no lookup", asy
   ).toEqual([]);
 });
 
-test("a stack reads as an ordered list nested one layer under its parent", async () => {
+test("a stack reads as one flat run of numbered levels", async () => {
   const slot = await mountList(
     {},
     {
@@ -746,14 +746,16 @@ test("a stack reads as an ordered list nested one layer under its parent", async
     },
   );
 
-  // The bottom of the stack keeps a plain label; the rest are numbered in
-  // based-on order, whatever their parentThreadId says.
-  await slot.findByLabelText("Add auth endpoints");
+  // Every level is numbered, the bottom included, in based-on order and
+  // whatever their parentThreadId says.
+  await slot.findByLabelText("Add auth endpoints, 1st in stack");
   await slot.findByLabelText("Hash passwords, 2nd in stack");
   await slot.findByLabelText("Add refresh tokens, 3rd in stack");
 
-  // One layer deep: every stacked row shares the first indent step.
+  // A run of siblings, not a tree: no level is the parent of the others, so
+  // every one of them sits at the same indent.
   const rows = [
+    "Add auth endpoints, 1st in stack",
     "Hash passwords, 2nd in stack",
     "Add refresh tokens, 3rd in stack",
   ];
@@ -762,7 +764,7 @@ test("a stack reads as an ordered list nested one layer under its parent", async
     return (row as HTMLElement).style.paddingLeft;
   });
   // BB's own step: an 8px base plus 24px per level of depth.
-  expect(new Set(indents)).toEqual(new Set(["32px"]));
+  expect(new Set(indents)).toEqual(new Set(["8px"]));
 });
 
 test("only the environments on screen are asked about, once each", async () => {
@@ -1016,18 +1018,19 @@ test("a stack level with several threads becomes one numbered worktree", async (
   const list = slot.getByRole("list", { name: "feat/hash, 2nd in stack" });
   const inside = [...list.querySelectorAll("div[style]")];
   expect(inside.map((r) => (r as HTMLElement).style.paddingLeft)).toEqual([
-    "56px",
-    "56px",
+    "32px",
+    "32px",
   ]);
   for (const member of inside) {
     expect(member.textContent).not.toContain("feat/hash");
   }
 
-  // The rest of the stack is untouched: still a numbered row at the same level.
+  // Levels are siblings, so the single-thread one sits at the same indent as
+  // the group header rather than under it.
   const solo = slot
     .getByLabelText("Add refresh tokens, 3rd in stack")
     .closest("div[style]")!;
-  expect((solo as HTMLElement).style.paddingLeft).toBe("32px");
+  expect((solo as HTMLElement).style.paddingLeft).toBe("8px");
 });
 
 test("a grouped row drops the branch its header already names", async () => {

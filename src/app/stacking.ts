@@ -171,43 +171,47 @@ function descendants(entry: StackBranch): StackBranch[] {
 }
 
 /**
- * One stack as a single row: the bottom branch's oldest thread, with every
- * branch above it flattened into one numbered layer.
+ * One stack as a flat run of levels, bottom first.
+ *
+ * Every level is a branch and every branch is a worktree, so a level is drawn
+ * by the same rule as any other worktree: one thread is a row, several are a
+ * group. Numbering starts at 1 — the bottom included — so the numbers form one
+ * unbroken column and the base is not a special case.
+ *
+ * This used to hang the whole stack off its bottom *thread*, which made that
+ * one thread both a row and the stack's container. The bottom could then never
+ * be a group, and its siblings had to be shoved into the layer beneath it as
+ * peers of the branches built on top of them — two different relationships
+ * drawn as one. A run of levels has no container to appoint, so the question
+ * does not arise.
  */
-function buildStackNode(bottom: StackBranch): ThreadNode {
-  const layer: ThreadNode[] = [];
-  const [anchor, ...alongside] = [...bottom.nodes].sort(byCreation);
-
-  // Threads sharing the bottom branch are peers at position 1, not results of
-  // it, so they ride at the head of the layer.
-  for (const node of alongside) {
-    layer.push({ ...node, children: [], stackPosition: 1 });
-  }
-
-  let position = 1;
-  for (const entry of descendants(bottom)) {
+function buildStackLevels(bottom: StackBranch): ThreadNode[] {
+  const levels: ThreadNode[] = [];
+  let position = 0;
+  for (const entry of [bottom, ...descendants(bottom)]) {
     position += 1;
     for (const node of [...entry.nodes].sort(byCreation)) {
-      // One layer deep: a stacked thread's own nesting is folded into the
+      // One level deep: a stacked thread's own nesting is folded into the
       // stack, so the list stays a flat, numbered read.
-      layer.push({ ...node, children: [], stackPosition: position });
+      levels.push({ ...node, children: [], stackPosition: position });
     }
   }
-
-  return { ...anchor!, children: layer, stackPosition: null };
+  return levels;
 }
 
 /** Drops threads a stack claimed, and re-roots stacks found underneath. */
 function prune(
   node: ThreadNode,
   consumed: ReadonlySet<string>,
-  rebuilt: ReadonlyMap<string, ThreadNode>,
+  rebuilt: ReadonlyMap<string, readonly ThreadNode[]>,
 ): ThreadNode {
   const children: ThreadNode[] = [];
   for (const child of node.children) {
     const stacked = rebuilt.get(child.thread.id);
     if (stacked !== undefined) {
-      children.push(stacked);
+      // The whole run lands here: a stack found under an ordinary thread is
+      // still a run of levels, just one indent further in.
+      children.push(...stacked);
       continue;
     }
     if (consumed.has(child.thread.id)) continue;
@@ -229,14 +233,18 @@ function stackRoots(
   );
   if (bottoms.length === 0) return [...roots];
 
-  const rebuilt = new Map<string, ThreadNode>();
+  const rebuilt = new Map<string, readonly ThreadNode[]>();
   const consumed = new Set<string>();
   for (const [, bottom] of bottoms) {
     for (const entry of [bottom, ...descendants(bottom)]) {
       for (const node of entry.nodes) consumed.add(node.thread.id);
     }
-    const stack = buildStackNode(bottom);
-    rebuilt.set(stack.thread.id, stack);
+    const levels = buildStackLevels(bottom);
+    // Keyed on the bottom level's first thread, which is where the run is
+    // spliced back in so the stack keeps the place that thread had earned.
+    const anchor = levels[0];
+    if (anchor === undefined) continue;
+    rebuilt.set(anchor.thread.id, levels);
   }
 
   // Keep the order the sort already chose: a stack takes the place of its
@@ -245,24 +253,25 @@ function stackRoots(
   for (const node of roots) {
     const stack = rebuilt.get(node.thread.id);
     if (stack !== undefined) {
-      result.push(stack);
+      result.push(...stack);
       continue;
     }
     if (consumed.has(node.thread.id)) continue;
     result.push(prune(node, consumed, rebuilt));
   }
   // A stack whose bottom was nested under another thread has no root row yet.
-  for (const [threadId, stack] of rebuilt) {
+  for (const [threadId, levels] of rebuilt) {
     if (result.some((node) => node.thread.id === threadId)) continue;
-    result.push(stack);
+    result.push(...levels);
   }
   return result;
 }
 
 /**
- * Rebuilds each project's roots so that a stack is one root (its bottom branch)
- * with every branch above it flattened into a single nested layer, numbered
- * from 2 in depth-first order.
+ * Rebuilds each project's roots so that a stack is one flat run of levels,
+ * bottom first, numbered from 1 in depth-first order. A level with several
+ * threads on it is folded into a worktree group by the renderer, which is what
+ * lets every level — the bottom included — be drawn by one rule.
  *
  * Threads outside a stack keep the nesting they already had.
  */
